@@ -15,6 +15,12 @@ const DisplayPage = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [currentMenuIndex, setCurrentMenuIndex] = useState(0)
   const [slideshowInterval, setSlideshowInterval] = useState(5000)
+  const [transitionType, setTransitionType] = useState('normal')
+  
+  // Scrolling animation state
+  const [scrollPosition, setScrollPosition] = useState(0)
+  const [isScrolling, setIsScrolling] = useState(false)
+  const [animationStarted, setAnimationStarted] = useState(false)
 
   useEffect(() => {
     if (socket && displayId) {
@@ -28,6 +34,7 @@ const DisplayPage = () => {
           if (data.display.currentMenus && data.display.currentMenus.length > 0) {
             fetchMenusData(data.display.currentMenus)
             setSlideshowInterval(data.display.slideshowInterval || 5000)
+            setTransitionType(data.display.transitionType || 'normal')
           } else {
             setLoading(false)
           }
@@ -42,6 +49,7 @@ const DisplayPage = () => {
         if (data.menuIds && data.menuIds.length > 0) {
           await fetchMenusData(data.menuIds.map((menuId, index) => ({ menu: menuId, order: index })))
           setSlideshowInterval(data.slideshowInterval || 5000)
+          setTransitionType(data.transitionType || 'normal')
         } else {
           setCurrentMenus([])
         }
@@ -79,7 +87,7 @@ const DisplayPage = () => {
 
   // Slideshow effect
   useEffect(() => {
-    if (currentMenus.length === 0) return
+    if (currentMenus.length === 0 || transitionType !== 'normal') return
 
     const interval = setInterval(() => {
       setCurrentImageIndex(prevIndex => {
@@ -119,13 +127,79 @@ const DisplayPage = () => {
     }, slideshowInterval)
 
     return () => clearInterval(interval)
-  }, [currentMenus, currentMenuIndex, slideshowInterval])
+  }, [currentMenus, currentMenuIndex, slideshowInterval, transitionType])
 
   // Reset indices when menus change
   useEffect(() => {
     setCurrentImageIndex(0)
     setCurrentMenuIndex(0)
+    setScrollPosition(0)
   }, [currentMenus])
+
+  // Scrolling animation effect
+  useEffect(() => {
+    if (transitionType !== 'scrolling' || currentMenus.length === 0) {
+      setIsScrolling(false)
+      setAnimationStarted(false)
+      return
+    }
+
+    const currentMenu = currentMenus[currentMenuIndex]
+    if (!currentMenu || currentMenu.menuType === 'custom' || !currentMenu.images) {
+      setIsScrolling(false)
+      setAnimationStarted(false)
+      return
+    }
+
+    setIsScrolling(true)
+    
+    // Delay animation start to ensure first image is fully visible
+    const startTimer = setTimeout(() => {
+      setAnimationStarted(true)
+    }, 1000) // 1 second delay to show first image
+
+    return () => {
+      clearTimeout(startTimer)
+      setIsScrolling(false)
+      setAnimationStarted(false)
+    }
+  }, [transitionType, currentMenus, currentMenuIndex])
+
+  // Initialize scroll position to start with first image visible (no black gap)
+  useEffect(() => {
+    if (transitionType === 'scrolling' && currentMenus.length > 0) {
+      const currentMenu = currentMenus[currentMenuIndex]
+      if (currentMenu && currentMenu.images && currentMenu.images.length > 0) {
+        // Start at the height of one image so the first image is immediately visible
+        setScrollPosition(window.innerHeight)
+      }
+    }
+  }, [transitionType, currentMenus, currentMenuIndex])
+
+  // Add CSS animation for seamless scrolling
+  useEffect(() => {
+    if (transitionType === 'scrolling') {
+      const style = document.createElement('style')
+      const imageCount = currentMenus[currentMenuIndex]?.images?.length || 1
+      const totalHeight = imageCount * 100
+      
+      style.textContent = `
+        @keyframes scrollAnimation {
+          0% {
+            transform: translateY(0vh);
+          }
+          100% {
+            transform: translateY(-${totalHeight}vh);
+          }
+        }
+      `
+      document.head.appendChild(style)
+      
+      return () => {
+        document.head.removeChild(style)
+      }
+    }
+  }, [transitionType, currentMenus, currentMenuIndex])
 
   if (loading) {
     return (
@@ -247,20 +321,66 @@ const DisplayPage = () => {
 
   // Render image-based menu (existing functionality)
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
+    <div className="min-h-screen bg-black relative overflow-hidden" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh' }}>
       {/* Fullscreen Image Display */}
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh' }}>
         {currentImage ? (
-          <img
-            src={currentImage.imageUrl}
-            alt="Menu Display"
-            className="w-full h-full object-cover absolute inset-0"
-            style={{
-              width: '100vw',
-              height: '100vh',
-              objectFit: 'cover'
-            }}
-          />
+          transitionType === 'scrolling' && isScrolling ? (
+            // Scrolling animation mode with seamless loop using CSS animation
+            <div 
+              className="relative w-full h-full"
+              style={{
+                animation: animationStarted ? `scrollAnimation ${slideshowInterval / 1000}s linear infinite` : 'none',
+                transform: animationStarted ? 'none' : 'translateY(0vh)', // Start with first image visible
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh'
+              }}
+            >
+              {/* Create seamless loop by duplicating images */}
+              {(() => {
+                const images = currentMenu.images
+                if (!images || images.length === 0) return null
+                
+                // Create array with images duplicated for seamless loop
+                // Start with original images, then repeat them
+                const seamlessImages = [
+                  ...images, // Original images
+                  ...images  // Duplicated images for seamless loop
+                ]
+                
+                return seamlessImages.map((image, index) => (
+                  <img
+                    key={`${currentMenu._id}-${index}`}
+                    src={image.imageUrl}
+                    alt={`Menu Display ${index + 1}`}
+                    className="w-full h-screen object-cover absolute"
+                    style={{
+                      top: `${index * 100}vh`,
+                      left: 0,
+                      width: '100vw',
+                      height: '100vh',
+                      objectFit: 'cover'
+                    }}
+                  />
+                ))
+              })()}
+            </div>
+          ) : (
+            // Normal slideshow mode
+            <img
+              src={currentImage.imageUrl}
+              alt="Menu Display"
+              className="w-full h-full object-cover absolute inset-0"
+              style={{
+                width: '100vw',
+                height: '100vh',
+                objectFit: 'cover'
+              }}
+            />
+          )
         ) : (
           <div className="text-center text-white">
             <div className="text-6xl mb-4">📋</div>

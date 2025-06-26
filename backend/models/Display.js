@@ -38,6 +38,11 @@ const displaySchema = new mongoose.Schema({
   slideshowInterval: {
     type: Number,
     default: 5000 // 5 seconds default
+  },
+  transitionType: {
+    type: String,
+    enum: ['normal', 'scrolling'],
+    default: 'normal'
   }
 }, {
   timestamps: true

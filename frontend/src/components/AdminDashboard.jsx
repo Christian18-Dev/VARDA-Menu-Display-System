@@ -68,7 +68,7 @@ const AdminDashboard = () => {
     displayId: '',
     location: ''
   })
-  const [displayMenus, setDisplayMenus] = useState({}) // { displayId: { menuIds: [], slideshowInterval: 5000 } }
+  const [displayMenus, setDisplayMenus] = useState({}) // { displayId: { menuIds: [], slideshowInterval: 5000, transitionType: 'normal' } }
 
   useEffect(() => {
     fetchData()
@@ -113,7 +113,8 @@ const AdminDashboard = () => {
       displaysRes.data.forEach(display => {
         displayMenusState[display.displayId] = {
           menuIds: display.currentMenus?.map(cm => cm.menu?._id).filter(Boolean) || [],
-          slideshowInterval: display.slideshowInterval || 5000
+          slideshowInterval: display.slideshowInterval || 5000,
+          transitionType: display.transitionType || 'normal'
         }
       })
       setDisplayMenus(displayMenusState)
@@ -179,12 +180,13 @@ const AdminDashboard = () => {
     if (!displayData) return
     
     try {
-      await updateDisplayMenus(displayId, displayData.menuIds, displayData.slideshowInterval)
+      await updateDisplayMenus(displayId, displayData.menuIds, displayData.slideshowInterval, displayData.transitionType)
       if (socket) {
         socket.emit('update-display', { 
           displayId, 
           menuIds: displayData.menuIds, 
-          slideshowInterval: displayData.slideshowInterval 
+          slideshowInterval: displayData.slideshowInterval,
+          transitionType: displayData.transitionType
         })
       }
       setSuccessMessage('Display settings updated!')
@@ -245,6 +247,16 @@ const AdminDashboard = () => {
       [displayId]: {
         ...prev[displayId],
         slideshowInterval: interval
+      }
+    }))
+  }
+
+  const handleTransitionTypeChange = (displayId, transitionType) => {
+    setDisplayMenus(prev => ({
+      ...prev,
+      [displayId]: {
+        ...prev[displayId],
+        transitionType: transitionType
       }
     }))
   }
@@ -587,26 +599,45 @@ const AdminDashboard = () => {
                               Only this display will show these menus
                             </p>
                           </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Slideshow Interval for this Display
-                            </label>
-                            <div className="flex items-center space-x-2">
-                              <Clock className="h-4 w-4 text-gray-500" />
-                              <input
-                                type="number"
-                                min="1000"
-                                max="30000"
-                                step="1000"
-                                value={displayMenus[display.displayId]?.slideshowInterval || 5000}
-                                onChange={(e) => handleSlideshowIntervalChange(display.displayId, parseInt(e.target.value))}
-                                className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                              />
-                              <span className="text-sm text-gray-500">ms</span>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Slideshow Interval for this Display
+                              </label>
+                              <div className="flex items-center space-x-2">
+                                <Clock className="h-4 w-4 text-gray-500" />
+                                <input
+                                  type="number"
+                                  min="1000"
+                                  max="30000"
+                                  step="1000"
+                                  value={displayMenus[display.displayId]?.slideshowInterval || 5000}
+                                  onChange={(e) => handleSlideshowIntervalChange(display.displayId, parseInt(e.target.value))}
+                                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                />
+                                <span className="text-sm text-gray-500">ms</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Time between image transitions for this display only
+                              </p>
                             </div>
-                            <p className="text-xs text-gray-500 mt-1">
-                              Time between image transitions for this display only
-                            </p>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Transition Type
+                              </label>
+                              <select
+                                value={displayMenus[display.displayId]?.transitionType || 'normal'}
+                                onChange={(e) => handleTransitionTypeChange(display.displayId, e.target.value)}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                              >
+                                <option value="normal">Normal Slideshow</option>
+                                <option value="scrolling">Scrolling Animation</option>
+                              </select>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Normal: Fade between images | Scrolling: Images scroll down the screen
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>

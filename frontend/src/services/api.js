@@ -50,8 +50,8 @@ export const toggleUserStatus = (userId) => api.put(`/auth/users/${userId}/toggl
 export const getDisplays = () => api.get('/displays')
 export const createDisplay = (displayData) => api.post('/displays', displayData)
 export const deleteDisplay = (displayId) => api.delete(`/displays/${displayId}`)
-export const updateDisplayMenus = (displayId, menuIds, slideshowInterval) => 
-  api.put(`/displays/${displayId}/menus`, { menuIds, slideshowInterval })
+export const updateDisplayMenus = (displayId, menuIds, slideshowInterval, transitionType) => 
+  api.put(`/displays/${displayId}/menus`, { menuIds, slideshowInterval, transitionType })
 
 // Menu APIs
 export const getMenus = () => api.get('/menus')

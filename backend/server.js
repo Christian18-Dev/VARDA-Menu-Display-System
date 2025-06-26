@@ -30,7 +30,7 @@ fs.ensureDirSync(uploadsDir);
 app.use('/uploads', express.static(uploadsDir));
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/varda-menu-system')
+mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 
@@ -68,7 +68,7 @@ io.on('connection', (socket) => {
   // Handle admin updates
   socket.on('update-display', async (data) => {
     try {
-      const { displayId, menuIds, slideshowInterval } = data;
+      const { displayId, menuIds, slideshowInterval, transitionType } = data;
       const display = await Display.findOne({ displayId });
       if (display) {
         // Update menus with order
@@ -81,13 +81,17 @@ io.on('connection', (socket) => {
           display.slideshowInterval = slideshowInterval;
         }
         
+        if (transitionType) {
+          display.transitionType = transitionType;
+        }
+        
         await display.save();
         
         // Emit to specific display
-        io.to(`display-${displayId}`).emit('menus-updated', { menuIds, slideshowInterval });
+        io.to(`display-${displayId}`).emit('menus-updated', { menuIds, slideshowInterval, transitionType });
         
         // Emit to admin for confirmation
-        socket.emit('update-success', { displayId, menuIds, slideshowInterval });
+        socket.emit('update-success', { displayId, menuIds, slideshowInterval, transitionType });
       }
     } catch (error) {
       console.error('Update display error:', error);
@@ -173,7 +177,7 @@ app.get('/api/menus/:id', async (req, res) => {
 app.put('/api/displays/:displayId/menus', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { displayId } = req.params;
-    const { menuIds, slideshowInterval } = req.body;
+    const { menuIds, slideshowInterval, transitionType } = req.body;
     
     const display = await Display.findOne({ displayId });
     if (!display) {
@@ -190,10 +194,14 @@ app.put('/api/displays/:displayId/menus', authenticateToken, requireAdmin, async
       display.slideshowInterval = slideshowInterval;
     }
     
+    if (transitionType) {
+      display.transitionType = transitionType;
+    }
+    
     await display.save();
     
     // Emit real-time update
-    io.to(`display-${displayId}`).emit('menus-updated', { menuIds, slideshowInterval });
+    io.to(`display-${displayId}`).emit('menus-updated', { menuIds, slideshowInterval, transitionType });
     
     res.json(display);
   } catch (error) {
