@@ -48,6 +48,8 @@ const AdminDashboard = () => {
   const [viewMode, setViewMode] = useState('grid') // grid or list
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
+  const [selectedBranch, setSelectedBranch] = useState('all')
+  const [selectedDisplayBranch, setSelectedDisplayBranch] = useState('all')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
@@ -61,12 +63,14 @@ const AdminDashboard = () => {
     name: '',
     description: '',
     category: 'general',
+    branch: 'Ateneo',
     images: []
   })
   const [displayForm, setDisplayForm] = useState({
     name: '',
     displayId: '',
-    location: ''
+    location: '',
+    branch: 'Ateneo'
   })
   const [displayMenus, setDisplayMenus] = useState({}) // { displayId: { menuIds: [], slideshowInterval: 5000, transitionType: 'normal' } }
 
@@ -148,9 +152,10 @@ const AdminDashboard = () => {
       formData.append('name', menuForm.name)
       formData.append('description', menuForm.description)
       formData.append('category', menuForm.category)
+      formData.append('branch', menuForm.branch)
 
       await uploadMenu(formData)
-      setMenuForm({ name: '', description: '', category: 'general', images: [] })
+      setMenuForm({ name: '', description: '', category: 'general', branch: 'Ateneo', images: [] })
       setSuccessMessage('Menu uploaded successfully!')
       fetchData()
     } catch (error) {
@@ -165,7 +170,7 @@ const AdminDashboard = () => {
     e.preventDefault()
     try {
       await createDisplay(displayForm)
-      setDisplayForm({ name: '', displayId: '', location: '' })
+      setDisplayForm({ name: '', displayId: '', location: '', branch: 'Ateneo' })
       setShowCreateForm(false)
       setSuccessMessage('Display created successfully!')
       fetchData()
@@ -288,7 +293,14 @@ const AdminDashboard = () => {
     const matchesSearch = menu.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          menu.description?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategory === 'all' || menu.category === selectedCategory
-    return matchesSearch && matchesCategory
+    const matchesBranch = selectedBranch === 'all' || menu.branch === selectedBranch
+    return matchesSearch && matchesCategory && matchesBranch
+  })
+
+  // Filter displays based on branch
+  const filteredDisplays = displays.filter(display => {
+    const matchesBranch = selectedDisplayBranch === 'all' || display.branch === selectedDisplayBranch
+    return matchesBranch
   })
 
   // Separate custom menus and image menus
@@ -394,7 +406,7 @@ const AdminDashboard = () => {
               }`}
             >
               <Monitor className="inline h-4 w-4 mr-2" />
-              Displays ({displays.length})
+              Displays ({filteredDisplays.length})
             </button>
             <button
               onClick={() => setActiveTab('menus')}
@@ -427,15 +439,30 @@ const AdminDashboard = () => {
             {/* Create Display Section */}
             <div className="bg-white rounded-lg shadow-sm border">
               <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
                   <h3 className="text-lg font-medium text-gray-900">Display Management</h3>
-                  <button
-                    onClick={() => setShowCreateForm(!showCreateForm)}
-                    className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Add Display</span>
-                  </button>
+                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+                    <select
+                      value={selectedDisplayBranch} 
+                      onChange={(e) => setSelectedDisplayBranch(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="all">All Branches</option>
+                      <option value="Ateneo">Ateneo</option>
+                      <option value="Lasalle">Lasalle</option>
+                      <option value="PUP">PUP</option>
+                      <option value="UST">UST</option>
+                      <option value="FEU">FEU</option>
+                      <option value="Mapua">Mapua</option>
+                    </select>
+                    <button
+                      onClick={() => setShowCreateForm(!showCreateForm)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Add Display</span>
+                    </button>
+                  </div>
                 </div>
               </div>
               
@@ -467,6 +494,18 @@ const AdminDashboard = () => {
                       className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       required
                     />
+                    <select
+                      value={displayForm.branch}
+                      onChange={(e) => setDisplayForm({...displayForm, branch: e.target.value})}
+                      className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="Ateneo">Ateneo</option>
+                      <option value="Lasalle">Lasalle</option>
+                      <option value="PUP">PUP</option>
+                      <option value="UST">UST</option>
+                      <option value="FEU">FEU</option>
+                      <option value="Mapua">Mapua</option>
+                    </select>
                     <div className="md:col-span-3 flex space-x-3">
                       <button
                         type="submit"
@@ -491,17 +530,19 @@ const AdminDashboard = () => {
             {/* Displays List */}
             <div className="bg-white rounded-lg shadow-sm border">
               <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Display Screens</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                  <h3 className="text-lg font-medium text-gray-900">Display Screens</h3>
+                </div>
               </div>
               <div className="divide-y divide-gray-200">
-                {displays.length === 0 ? (
+                {filteredDisplays.length === 0 ? (
                   <div className="p-8 text-center text-gray-500">
                     <Monitor className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>No displays created yet.</p>
+                    <p>No displays found.</p>
                     <p className="text-sm">Create your first display to get started.</p>
                   </div>
                 ) : (
-                  displays.map((display) => (
+                  filteredDisplays.map((display) => (
                     <div key={display._id} className="p-6 hover:bg-gray-50 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -517,6 +558,9 @@ const AdminDashboard = () => {
                             </div>
                             <div>
                               <span className="font-medium">Location:</span> {display.location}
+                            </div>
+                            <div>
+                              <span className="font-medium">Branch:</span> {display.branch || 'Ateneo'}
                             </div>
                             <div>
                               <span className="font-medium">Last Seen:</span> {new Date(display.lastSeen).toLocaleString()}
@@ -691,6 +735,26 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                   
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Branch
+                      </label>
+                      <select
+                        value={menuForm.branch}
+                        onChange={(e) => setMenuForm({...menuForm, branch: e.target.value})}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      >
+                        <option value="Ateneo">Ateneo</option>
+                        <option value="Lasalle">Lasalle</option>
+                        <option value="PUP">PUP</option>
+                        <option value="UST">UST</option>
+                        <option value="FEU">FEU</option>
+                        <option value="Mapua">Mapua</option>
+                      </select>
+                    </div>
+                  </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Description (optional)
@@ -780,6 +844,19 @@ const AdminDashboard = () => {
                         </option>
                       ))}
                     </select>
+                    <select
+                      value={selectedBranch}
+                      onChange={(e) => setSelectedBranch(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="all">All Branches</option>
+                      <option value="Ateneo">Ateneo</option>
+                      <option value="Lasalle">Lasalle</option>
+                      <option value="PUP">PUP</option>
+                      <option value="UST">UST</option>
+                      <option value="FEU">FEU</option>
+                      <option value="Mapua">Mapua</option>
+                    </select>
                     <div className="flex border border-gray-300 rounded-md">
                       <button
                         onClick={() => setViewMode('grid')}
@@ -852,7 +929,11 @@ const AdminDashboard = () => {
                             <p className="text-sm text-gray-600 mb-2">{menu.description}</p>
                           )}
                           <div className="flex items-center justify-between text-sm text-gray-500">
-                            <span className="capitalize">{menu.category}</span>
+                            <div className="flex items-center space-x-2">
+                              <span className="capitalize">{menu.category}</span>
+                              <span className="text-gray-300">•</span>
+                              <span className="capitalize">{menu.branch || 'main'}</span>
+                            </div>
                             <span>
                               {menu.menuType === 'custom' 
                                 ? `${menu.menuItems?.length || 0} items` 
@@ -937,7 +1018,11 @@ const AdminDashboard = () => {
                               <p className="text-sm text-gray-600 mb-2">{menu.description}</p>
                             )}
                             <div className="flex items-center justify-between text-sm text-gray-500">
-                              <span className="capitalize">{menu.category}</span>
+                              <div className="flex items-center space-x-2">
+                                <span className="capitalize">{menu.category}</span>
+                                <span className="text-gray-300">•</span>
+                                <span className="capitalize">{menu.branch || 'main'}</span>
+                              </div>
                               <span>{menu.menuItems?.length || 0} items</span>
                             </div>
                             <div className="mt-2 text-xs text-gray-400">

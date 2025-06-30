@@ -126,6 +126,10 @@ const menuSchema = new mongoose.Schema({
   category: {
     type: String,
     default: 'general'
+  },
+  branch: {
+    type: String,
+    default: 'Ateneo'
   }
 }, {
   timestamps: true

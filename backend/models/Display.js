@@ -17,6 +17,10 @@ const displaySchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  branch: {
+    type: String,
+    default: 'Ateneo'
+  },
   currentMenus: [{
     menu: {
       type: mongoose.Schema.Types.ObjectId,

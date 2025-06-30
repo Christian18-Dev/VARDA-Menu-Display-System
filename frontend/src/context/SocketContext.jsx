@@ -14,43 +14,101 @@ export const useSocket = () => {
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null)
   const [isConnected, setIsConnected] = useState(false)
+  const [connectionError, setConnectionError] = useState(null)
 
   useEffect(() => {
-    const newSocket = io('http://localhost:5000', {
-      transports: ['websocket', 'polling'],
-      timeout: 20000,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    })
+    let reconnectAttempts = 0
+    const maxReconnectAttempts = 5
+    const baseDelay = 1000
 
-    newSocket.on('connect', () => {
-      console.log('Connected to server')
-      setIsConnected(true)
-    })
+    const connectSocket = () => {
+      const newSocket = io('http://localhost:5000', {
+        transports: ['websocket', 'polling'],
+        timeout: 20000,
+        reconnection: false, // We'll handle reconnection manually
+        forceNew: true
+      })
 
-    newSocket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error)
-      setIsConnected(false)
-    })
+      newSocket.on('connect', () => {
+        console.log('Connected to server')
+        setIsConnected(true)
+        setConnectionError(null)
+        reconnectAttempts = 0 // Reset attempts on successful connection
+      })
 
-    newSocket.on('disconnect', (reason) => {
-      console.log('Disconnected from server:', reason)
-      setIsConnected(false)
-    })
+      newSocket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error)
+        setIsConnected(false)
+        setConnectionError(error.message)
+        
+        // Attempt to reconnect with exponential backoff
+        if (reconnectAttempts < maxReconnectAttempts) {
+          const delay = baseDelay * Math.pow(2, reconnectAttempts)
+          console.log(`Reconnection attempt ${reconnectAttempts + 1} in ${delay}ms`)
+          
+          setTimeout(() => {
+            reconnectAttempts++
+            newSocket.connect()
+          }, delay)
+        } else {
+          console.error('Max reconnection attempts reached')
+          setConnectionError('Unable to connect to server after multiple attempts')
+        }
+      })
 
-    setSocket(newSocket)
+      newSocket.on('disconnect', (reason) => {
+        console.log('Disconnected from server:', reason)
+        setIsConnected(false)
+        
+        // Only attempt reconnection if it wasn't a manual disconnect
+        if (reason !== 'io client disconnect' && reason !== 'io server disconnect') {
+          if (reconnectAttempts < maxReconnectAttempts) {
+            const delay = baseDelay * Math.pow(2, reconnectAttempts)
+            console.log(`Reconnection attempt ${reconnectAttempts + 1} in ${delay}ms`)
+            
+            setTimeout(() => {
+              reconnectAttempts++
+              newSocket.connect()
+            }, delay)
+          }
+        }
+      })
+
+      newSocket.on('reconnect', (attemptNumber) => {
+        console.log('Reconnected to server after', attemptNumber, 'attempts')
+        setIsConnected(true)
+        setConnectionError(null)
+        reconnectAttempts = 0
+      })
+
+      newSocket.on('reconnect_error', (error) => {
+        console.error('Reconnection error:', error)
+        setConnectionError('Reconnection failed')
+      })
+
+      newSocket.on('reconnect_failed', () => {
+        console.error('Reconnection failed after all attempts')
+        setConnectionError('Unable to reconnect to server')
+      })
+
+      setSocket(newSocket)
+
+      return newSocket
+    }
+
+    const socketInstance = connectSocket()
 
     return () => {
-      if (newSocket) {
-        newSocket.close()
+      if (socketInstance) {
+        socketInstance.disconnect()
       }
     }
   }, [])
 
   const value = {
     socket,
-    isConnected
+    isConnected,
+    connectionError
   }
 
   return (

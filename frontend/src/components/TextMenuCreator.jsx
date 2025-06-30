@@ -16,6 +16,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
     name: menu?.name || '',
     description: menu?.description || '',
     category: menu?.category || 'general',
+    branch: menu?.branch || 'Ateneo',
     menuItems: menu?.menuItems || [],
     design: menu?.design || {
       backgroundColor: '#000000',
@@ -250,6 +251,26 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                   <option value="lunch">Lunch</option>
                   <option value="dinner">Dinner</option>
                   <option value="drinks">Drinks</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Branch
+                </label>
+                <select
+                  value={formData.branch}
+                  onChange={(e) => setFormData({...formData, branch: e.target.value})}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                >
+                  <option value="Ateneo">Ateneo</option>
+                  <option value="Lasalle">Lasalle</option>
+                  <option value="PUP">PUP</option>
+                  <option value="UST">UST</option>
+                  <option value="FEU">FEU</option>
+                  <option value="Mapua">Mapua</option>
                 </select>
               </div>
             </div>

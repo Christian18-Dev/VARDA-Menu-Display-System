@@ -125,8 +125,8 @@ app.get('/api/displays', async (req, res) => {
 // Create a new display
 app.post('/api/displays', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { name, displayId, location } = req.body;
-    const display = new Display({ name, displayId, location });
+    const { name, displayId, location, branch } = req.body;
+    const display = new Display({ name, displayId, location, branch });
     await display.save();
     res.status(201).json(display);
   } catch (error) {
@@ -259,7 +259,7 @@ app.post('/api/upload-menu', authenticateToken, requireAdmin, (req, res) => {
         return res.status(400).json({ error: 'No files uploaded' });
       }
 
-      const { name, description, category } = req.body;
+      const { name, description, category, branch } = req.body;
       
       const images = req.files.map((file, index) => ({
         imageUrl: `/uploads/${file.filename}`,
@@ -274,7 +274,8 @@ app.post('/api/upload-menu', authenticateToken, requireAdmin, (req, res) => {
         description,
         images,
         menuType: 'image',
-        category: category || 'general'
+        category: category || 'general',
+        branch: branch || 'main'
       });
 
       await menu.save();
@@ -288,7 +289,7 @@ app.post('/api/upload-menu', authenticateToken, requireAdmin, (req, res) => {
 // Create custom menu
 app.post('/api/create-custom-menu', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { name, description, category, menuItems, design } = req.body;
+    const { name, description, category, branch, menuItems, design } = req.body;
     
     const menu = new Menu({
       name,
@@ -296,7 +297,8 @@ app.post('/api/create-custom-menu', authenticateToken, requireAdmin, async (req,
       menuType: 'custom',
       menuItems: menuItems || [],
       design: design || {},
-      category: category || 'general'
+      category: category || 'general',
+      branch: branch || 'main'
     });
 
     await menu.save();
@@ -309,12 +311,13 @@ app.post('/api/create-custom-menu', authenticateToken, requireAdmin, async (req,
 // Update text-based menu
 app.put('/api/menus/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { name, description, category, menuItems, design } = req.body;
+    const { name, description, category, branch, menuItems, design } = req.body;
     
     const updateData = {
       name,
       description,
-      category
+      category,
+      branch
     };
 
     if (menuItems) {
