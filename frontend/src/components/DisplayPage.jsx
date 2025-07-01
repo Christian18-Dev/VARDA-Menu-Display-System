@@ -384,7 +384,7 @@ const DisplayPage = () => {
         ) : (
           <div className="text-center text-white">
             <div className="text-6xl mb-4">📋</div>
-            <h1 className="text-4xl font-bold mb-2">No Menu Assigned</h1>
+            <h1 className="text-4xl font-bold mb-2">No Menu Assigned.</h1>
             <p className="text-xl text-gray-300">
               Please assign menus from the admin dashboard
             </p>
