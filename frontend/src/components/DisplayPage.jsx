@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useSocket } from '../context/SocketContext'
 import { getMenu } from '../services/api'
+import { fixMenuImageUrls } from '../utils/imageUtils'
 
 const DisplayPage = () => {
   const { displayId } = useParams()
@@ -67,7 +68,7 @@ const DisplayPage = () => {
       const menuPromises = menuRefs.map(async (menuRef) => {
         const response = await getMenu(menuRef.menu)
         return {
-          ...response.data,
+          ...fixMenuImageUrls(response.data),
           order: menuRef.order
         }
       })

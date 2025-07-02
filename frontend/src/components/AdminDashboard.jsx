@@ -11,6 +11,7 @@ import {
   createDisplay,
   deleteDisplay 
 } from '../services/api'
+import { fixMenuImageUrls } from '../utils/imageUtils'
 import { 
   Upload, 
   Monitor, 
@@ -109,12 +110,23 @@ const AdminDashboard = () => {
         getDisplays(),
         getMenus()
       ])
-      setDisplays(displaysRes.data)
-      setMenus(menusRes.data)
+      
+      // Fix image URLs for menus
+      const fixedMenus = menusRes.data.map(menu => fixMenuImageUrls(menu))
+      const fixedDisplays = displaysRes.data.map(display => ({
+        ...display,
+        currentMenus: display.currentMenus?.map(cm => ({
+          ...cm,
+          menu: cm.menu ? fixMenuImageUrls(cm.menu) : cm.menu
+        }))
+      }))
+      
+      setDisplays(fixedDisplays)
+      setMenus(fixedMenus)
       
       // Initialize display menus state
       const displayMenusState = {}
-      displaysRes.data.forEach(display => {
+      fixedDisplays.forEach(display => {
         displayMenusState[display.displayId] = {
           menuIds: display.currentMenus?.map(cm => cm.menu?._id).filter(Boolean) || [],
           slideshowInterval: display.slideshowInterval || 5000,
