@@ -139,6 +139,41 @@ const logSocketEvent = (event, socketId, additionalInfo = '') => {
   console.log(`${eventEmoji} [${timestamp}] ${eventText} | ID: ${shortId}... | ${additionalInfo}`);
 };
 
+// Periodic status logging every 60 seconds
+const logSystemStatus = () => {
+  const timestamp = new Date().toISOString();
+  const totalClients = connectedClients.size;
+  
+  // Count displays vs admin clients
+  let displayClients = 0;
+  let adminClients = 0;
+  const connectedDisplays = [];
+  
+  connectedClients.forEach((clientInfo, socketId) => {
+    if (clientInfo.displayId) {
+      displayClients++;
+      connectedDisplays.push(clientInfo.displayId);
+    } else {
+      adminClients++;
+    }
+  });
+  
+  console.log(`\n📊 [${timestamp}] SYSTEM STATUS | Total Clients: ${totalClients} | Displays: ${displayClients} | Admin: ${adminClients}`);
+  
+  if (connectedDisplays.length > 0) {
+    console.log(`   📺 Connected Displays: ${connectedDisplays.join(', ')}`);
+  }
+  
+  if (totalClients === 0) {
+    console.log(`   ⚠️  No active connections`);
+  }
+  
+  console.log(''); // Empty line for better readability
+};
+
+// Start periodic logging
+setInterval(logSystemStatus, 60000); // 60 seconds = 60000ms
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   const connectionTime = new Date();
