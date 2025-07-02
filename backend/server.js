@@ -10,13 +10,16 @@ require('dotenv').config();
 
 const app = express();
 const server = createServer(app);
+
+// Trust proxy for rate limiting (needed when deployed behind a proxy like Render)
+app.set('trust proxy', 1);
 // CORS configuration for both development and production
 const allowedOrigins = [
   "http://localhost:5173", 
   "http://localhost:3000", 
   "http://localhost:3001",
   "https://christian18-dev.github.io",
-  "https://your-render-backend-url.onrender.com" // Replace with your actual frontend URL
+  "https://varda-menu-display-system.onrender.com" // Your actual Render backend URL
 ];
 
 const io = new Server(server, {
@@ -64,6 +67,44 @@ const User = require('./models/User');
 // Import authentication middleware and routes
 const { authenticateToken, requireAdmin } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
+
+// Utility function to fix image URLs for existing data
+const fixImageUrls = (data) => {
+  const backendUrl = process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com';
+  
+  if (Array.isArray(data)) {
+    return data.map(item => fixImageUrls(item));
+  }
+  
+  if (data && typeof data === 'object') {
+    const fixed = { ...data };
+    
+    // Fix menu images
+    if (fixed.images && Array.isArray(fixed.images)) {
+      fixed.images = fixed.images.map(image => ({
+        ...image,
+        imageUrl: image.imageUrl.startsWith('http') ? image.imageUrl : `${backendUrl}${image.imageUrl}`
+      }));
+    }
+    
+    // Fix menu items with images
+    if (fixed.menuItems && Array.isArray(fixed.menuItems)) {
+      fixed.menuItems = fixed.menuItems.map(item => ({
+        ...item,
+        imageUrl: item.imageUrl && !item.imageUrl.startsWith('http') ? `${backendUrl}${item.imageUrl}` : item.imageUrl
+      }));
+    }
+    
+    // Fix background image
+    if (fixed.design && fixed.design.backgroundImage && !fixed.design.backgroundImage.startsWith('http')) {
+      fixed.design.backgroundImage = `${backendUrl}${fixed.design.backgroundImage}`;
+    }
+    
+    return fixed;
+  }
+  
+  return data;
+};
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -138,7 +179,7 @@ app.get('/api/displays', async (req, res) => {
       path: 'currentMenus.menu',
       model: 'Menu'
     });
-    res.json(displays);
+    res.json(fixImageUrls(displays));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -176,7 +217,7 @@ app.delete('/api/displays/:displayId', authenticateToken, requireAdmin, async (r
 app.get('/api/menus', async (req, res) => {
   try {
     const menus = await Menu.find({ isActive: true });
-    res.json(menus);
+    res.json(fixImageUrls(menus));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -189,7 +230,7 @@ app.get('/api/menus/:id', async (req, res) => {
     if (!menu) {
       return res.status(404).json({ error: 'Menu not found' });
     }
-    res.json(menu);
+    res.json(fixImageUrls(menu));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -284,7 +325,7 @@ app.post('/api/upload-menu', authenticateToken, requireAdmin, (req, res) => {
       const { name, description, category, branch } = req.body;
       
       const images = req.files.map((file, index) => ({
-        imageUrl: `/uploads/${file.filename}`,
+        imageUrl: `${process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com'}/uploads/${file.filename}`,
         fileName: file.filename,
         fileSize: file.size,
         mimeType: file.mimetype,
@@ -379,7 +420,7 @@ app.post('/api/upload-item-image', authenticateToken, requireAdmin, (req, res) =
       }
 
       const imageData = {
-        imageUrl: `/uploads/${req.file.filename}`,
+        imageUrl: `${process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com'}/uploads/${req.file.filename}`,
         fileName: req.file.filename,
         fileSize: req.file.size,
         mimeType: req.file.mimetype
