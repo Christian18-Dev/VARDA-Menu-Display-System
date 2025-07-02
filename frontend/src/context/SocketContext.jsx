@@ -22,7 +22,9 @@ export const SocketProvider = ({ children }) => {
     const baseDelay = 1000
 
     const connectSocket = () => {
-      const newSocket = io('http://localhost:5000', {
+      // Use environment variable for backend URL, fallback to localhost for development
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'
+      const newSocket = io(backendUrl, {
         transports: ['websocket', 'polling'],
         timeout: 20000,
         reconnection: false, // We'll handle reconnection manually

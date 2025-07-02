@@ -228,7 +228,7 @@ const AdminDashboard = () => {
   }
 
   const getDisplayUrl = (displayId) => {
-    return `${window.location.origin}/display/${displayId}`
+    return `${window.location.origin}/VARDA-Menu-Display-System/display/${displayId}`
   }
 
   const handleImageChange = (e) => {
