@@ -9,7 +9,9 @@ export const fixImageUrl = (imageUrl) => {
   
   // If it's a relative URL, convert to full backend URL
   if (imageUrl.startsWith('/')) {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://varda-menu-display-system.onrender.com';
+    // Use environment variable if set, otherwise determine based on current environment
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 
+      (import.meta.env.DEV ? 'http://localhost:5000' : 'https://varda-menu-display-system.onrender.com');
     return `${backendUrl}${imageUrl}`;
   }
   
