@@ -126,9 +126,25 @@ const fixImageUrls = (data) => {
   }
 };
 
+// Socket connection tracking
+const connectedClients = new Map();
+
+// Helper function for formatted logging
+const logSocketEvent = (event, socketId, additionalInfo = '') => {
+  const timestamp = new Date().toISOString();
+  const shortId = socketId.substring(0, 8);
+  const eventEmoji = event === 'connect' ? '🔗' : event === 'disconnect' ? '🔌' : '📡';
+  const eventText = event === 'connect' ? 'CONNECTED' : event === 'disconnect' ? 'DISCONNECTED' : event.toUpperCase();
+  
+  console.log(`${eventEmoji} [${timestamp}] ${eventText} | ID: ${shortId}... | ${additionalInfo}`);
+};
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  const connectionTime = new Date();
+  connectedClients.set(socket.id, { connectionTime, displayId: null });
+  
+  logSocketEvent('connect', socket.id, `Total clients: ${connectedClients.size}`);
 
   // Handle display registration
   socket.on('register-display', async (displayId) => {
@@ -138,13 +154,24 @@ io.on('connection', (socket) => {
         display.lastSeen = new Date();
         await display.save();
         socket.join(`display-${displayId}`);
+        
+        // Update client tracking
+        const clientInfo = connectedClients.get(socket.id);
+        if (clientInfo) {
+          clientInfo.displayId = displayId;
+          connectedClients.set(socket.id, clientInfo);
+        }
+        
         socket.emit('display-registered', { success: true, display });
+        logSocketEvent('register-display', socket.id, `Display: ${displayId} | Name: ${display.name}`);
       } else {
         socket.emit('display-registered', { success: false, message: 'Display not found' });
+        logSocketEvent('register-display', socket.id, `FAILED - Display not found: ${displayId}`);
       }
     } catch (error) {
       console.error('Display registration error:', error);
       socket.emit('display-registered', { success: false, message: 'Registration failed' });
+      logSocketEvent('register-display', socket.id, `ERROR - ${error.message}`);
     }
   });
 
@@ -175,15 +202,24 @@ io.on('connection', (socket) => {
         
         // Emit to admin for confirmation
         socket.emit('update-success', { displayId, menuIds, slideshowInterval, transitionType });
+        
+        logSocketEvent('update-display', socket.id, `Display: ${displayId} | Menus: ${menuIds.length} | Interval: ${slideshowInterval}s`);
       }
     } catch (error) {
       console.error('Update display error:', error);
       socket.emit('update-error', { message: 'Update failed' });
+      logSocketEvent('update-display', socket.id, `ERROR - ${error.message}`);
     }
   });
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
+    const clientInfo = connectedClients.get(socket.id);
+    const connectionDuration = clientInfo ? Math.round((new Date() - clientInfo.connectionTime) / 1000) : 0;
+    const displayInfo = clientInfo?.displayId ? ` | Display: ${clientInfo.displayId}` : '';
+    
+    connectedClients.delete(socket.id);
+    
+    logSocketEvent('disconnect', socket.id, `Duration: ${connectionDuration}s${displayInfo} | Remaining clients: ${connectedClients.size}`);
   });
 });
 
