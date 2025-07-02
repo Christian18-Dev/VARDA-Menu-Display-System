@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig(({ mode }) => ({
-  base: '/',
+  base: '/VARDA-Menu-Display-System/',
   plugins: [react()],
   define: {
     // Define environment variables that will be available at build time
