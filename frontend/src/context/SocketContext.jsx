@@ -23,7 +23,7 @@ export const SocketProvider = ({ children }) => {
 
     const connectSocket = () => {
       // Use environment variable for backend URL, fallback to localhost for development
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://varda-menu-display-system.onrender.com')
       const newSocket = io(backendUrl, {
         transports: ['websocket', 'polling'],
         timeout: 20000,
