@@ -70,40 +70,60 @@ const authRoutes = require('./routes/auth');
 
 // Utility function to fix image URLs for existing data
 const fixImageUrls = (data) => {
-  const backendUrl = process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com';
-  
-  if (Array.isArray(data)) {
-    return data.map(item => fixImageUrls(item));
+  try {
+    const backendUrl = process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com';
+    
+    // Handle null/undefined data
+    if (!data) {
+      return data;
+    }
+    
+    if (Array.isArray(data)) {
+      return data.map(item => fixImageUrls(item));
+    }
+    
+    if (data && typeof data === 'object') {
+      const fixed = { ...data };
+      
+      // Fix menu images
+      if (fixed.images && Array.isArray(fixed.images)) {
+        fixed.images = fixed.images.map(image => {
+          if (!image || typeof image !== 'object') return image;
+          return {
+            ...image,
+            imageUrl: image.imageUrl && typeof image.imageUrl === 'string' && !image.imageUrl.startsWith('http') 
+              ? `${backendUrl}${image.imageUrl}` 
+              : image.imageUrl
+          };
+        });
+      }
+      
+      // Fix menu items with images
+      if (fixed.menuItems && Array.isArray(fixed.menuItems)) {
+        fixed.menuItems = fixed.menuItems.map(item => {
+          if (!item || typeof item !== 'object') return item;
+          return {
+            ...item,
+            imageUrl: item.imageUrl && typeof item.imageUrl === 'string' && !item.imageUrl.startsWith('http') 
+              ? `${backendUrl}${item.imageUrl}` 
+              : item.imageUrl
+          };
+        });
+      }
+      
+      // Fix background image
+      if (fixed.design && fixed.design.backgroundImage && typeof fixed.design.backgroundImage === 'string' && !fixed.design.backgroundImage.startsWith('http')) {
+        fixed.design.backgroundImage = `${backendUrl}${fixed.design.backgroundImage}`;
+      }
+      
+      return fixed;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error in fixImageUrls:', error);
+    return data; // Return original data if there's an error
   }
-  
-  if (data && typeof data === 'object') {
-    const fixed = { ...data };
-    
-    // Fix menu images
-    if (fixed.images && Array.isArray(fixed.images)) {
-      fixed.images = fixed.images.map(image => ({
-        ...image,
-        imageUrl: image.imageUrl.startsWith('http') ? image.imageUrl : `${backendUrl}${image.imageUrl}`
-      }));
-    }
-    
-    // Fix menu items with images
-    if (fixed.menuItems && Array.isArray(fixed.menuItems)) {
-      fixed.menuItems = fixed.menuItems.map(item => ({
-        ...item,
-        imageUrl: item.imageUrl && !item.imageUrl.startsWith('http') ? `${backendUrl}${item.imageUrl}` : item.imageUrl
-      }));
-    }
-    
-    // Fix background image
-    if (fixed.design && fixed.design.backgroundImage && !fixed.design.backgroundImage.startsWith('http')) {
-      fixed.design.backgroundImage = `${backendUrl}${fixed.design.backgroundImage}`;
-    }
-    
-    return fixed;
-  }
-  
-  return data;
 };
 
 // Socket.IO connection handling
@@ -179,7 +199,7 @@ app.get('/api/displays', async (req, res) => {
       path: 'currentMenus.menu',
       model: 'Menu'
     });
-    res.json(fixImageUrls(displays));
+    res.json(displays);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -217,8 +237,9 @@ app.delete('/api/displays/:displayId', authenticateToken, requireAdmin, async (r
 app.get('/api/menus', async (req, res) => {
   try {
     const menus = await Menu.find({ isActive: true });
-    res.json(fixImageUrls(menus));
+    res.json(menus);
   } catch (error) {
+    console.error('Error in /api/menus:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -230,7 +251,7 @@ app.get('/api/menus/:id', async (req, res) => {
     if (!menu) {
       return res.status(404).json({ error: 'Menu not found' });
     }
-    res.json(fixImageUrls(menu));
+    res.json(menu);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
