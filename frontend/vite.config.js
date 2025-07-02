@@ -4,6 +4,10 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => ({
   base: '/VARDA-Menu-Display-System/',
   plugins: [react()],
+  define: {
+    // Define environment variables that will be available at build time
+    'import.meta.env.VITE_BACKEND_URL': JSON.stringify(process.env.VITE_BACKEND_URL || ''),
+  },
   server: {
     port: 3001,
     proxy: mode === 'development' ? {
