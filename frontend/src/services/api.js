@@ -4,7 +4,7 @@ import axios from 'axios'
 // TODO: Replace 'your-app-name' with your actual Render app name
 const API_BASE_URL = import.meta.env.VITE_BACKEND_URL 
   ? `${import.meta.env.VITE_BACKEND_URL}/api` 
-  : (import.meta.env.DEV ? '/api' : 'https://varda-menu-display-system.onrender.com')
+  : (import.meta.env.DEV ? '/api' : 'https://varda-menu-display-system.onrender.com/api')
 
 const api = axios.create({
   baseURL: API_BASE_URL,
