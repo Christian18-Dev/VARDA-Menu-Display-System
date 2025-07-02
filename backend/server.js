@@ -47,12 +47,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, 'uploads');
-fs.ensureDirSync(uploadsDir);
-
-// Serve static files from uploads directory
-app.use('/uploads', express.static(uploadsDir));
+// Note: No longer using local file storage - images are stored as Base64 in MongoDB
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI)
@@ -68,11 +63,9 @@ const User = require('./models/User');
 const { authenticateToken, requireAdmin } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 
-// Utility function to fix image URLs for existing data
+// Utility function to handle image URLs (now supports both Base64 and external URLs)
 const fixImageUrls = (data) => {
   try {
-    const backendUrl = process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com';
-    
     // Handle null/undefined data
     if (!data) {
       return data;
@@ -85,35 +78,43 @@ const fixImageUrls = (data) => {
     if (data && typeof data === 'object') {
       const fixed = { ...data };
       
-      // Fix menu images
+      // Handle menu images (Base64 or external URLs)
       if (fixed.images && Array.isArray(fixed.images)) {
         fixed.images = fixed.images.map(image => {
           if (!image || typeof image !== 'object') return image;
           return {
             ...image,
-            imageUrl: image.imageUrl && typeof image.imageUrl === 'string' && !image.imageUrl.startsWith('http') 
-              ? `${backendUrl}${image.imageUrl}` 
+            // Keep Base64 URLs as-is, only fix relative URLs if they exist
+            imageUrl: image.imageUrl && typeof image.imageUrl === 'string' && 
+                     !image.imageUrl.startsWith('data:') && 
+                     !image.imageUrl.startsWith('http') 
+              ? `${process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com'}${image.imageUrl}` 
               : image.imageUrl
           };
         });
       }
       
-      // Fix menu items with images
+      // Handle menu items with images
       if (fixed.menuItems && Array.isArray(fixed.menuItems)) {
         fixed.menuItems = fixed.menuItems.map(item => {
           if (!item || typeof item !== 'object') return item;
           return {
             ...item,
-            imageUrl: item.imageUrl && typeof item.imageUrl === 'string' && !item.imageUrl.startsWith('http') 
-              ? `${backendUrl}${item.imageUrl}` 
+            imageUrl: item.imageUrl && typeof item.imageUrl === 'string' && 
+                     !item.imageUrl.startsWith('data:') && 
+                     !item.imageUrl.startsWith('http') 
+              ? `${process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com'}${item.imageUrl}` 
               : item.imageUrl
           };
         });
       }
       
-      // Fix background image
-      if (fixed.design && fixed.design.backgroundImage && typeof fixed.design.backgroundImage === 'string' && !fixed.design.backgroundImage.startsWith('http')) {
-        fixed.design.backgroundImage = `${backendUrl}${fixed.design.backgroundImage}`;
+      // Handle background image
+      if (fixed.design && fixed.design.backgroundImage && 
+          typeof fixed.design.backgroundImage === 'string' && 
+          !fixed.design.backgroundImage.startsWith('data:') && 
+          !fixed.design.backgroundImage.startsWith('http')) {
+        fixed.design.backgroundImage = `${process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com'}${fixed.design.backgroundImage}`;
       }
       
       return fixed;
@@ -364,21 +365,11 @@ app.put('/api/displays/:displayId/menus', authenticateToken, requireAdmin, async
   }
 });
 
-// File upload endpoint for multiple images
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const uploadMultiple = multer({ 
-  storage,
+// Base64 image upload middleware
+const uploadBase64Multiple = multer({
+  storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 5 * 1024 * 1024 // 5MB limit (reduced for Base64 storage)
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
@@ -387,12 +378,12 @@ const uploadMultiple = multer({
       cb(new Error('Only image files are allowed'));
     }
   }
-}).array('menuImages', 10); // Allow up to 10 images
+}).array('menuImages', 10);
 
-const uploadSingle = multer({ 
-  storage,
+const uploadBase64Single = multer({
+  storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 5 * 1024 * 1024 // 5MB limit
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
@@ -403,8 +394,13 @@ const uploadSingle = multer({
   }
 }).single('itemImage');
 
+// Helper function to convert buffer to Base64
+const bufferToBase64 = (buffer, mimeType) => {
+  return `data:${mimeType};base64,${buffer.toString('base64')}`;
+};
+
 app.post('/api/upload-menu', authenticateToken, requireAdmin, (req, res) => {
-  uploadMultiple(req, res, async (err) => {
+  uploadBase64Multiple(req, res, async (err) => {
     if (err) {
       return res.status(400).json({ error: err.message });
     }
@@ -417,8 +413,8 @@ app.post('/api/upload-menu', authenticateToken, requireAdmin, (req, res) => {
       const { name, description, category, branch } = req.body;
       
       const images = req.files.map((file, index) => ({
-        imageUrl: `${process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com'}/uploads/${file.filename}`,
-        fileName: file.filename,
+        imageUrl: bufferToBase64(file.buffer, file.mimetype),
+        fileName: file.originalname,
         fileSize: file.size,
         mimeType: file.mimetype,
         order: index
@@ -501,7 +497,7 @@ app.put('/api/menus/:id', authenticateToken, requireAdmin, async (req, res) => {
 
 // Upload image for menu item
 app.post('/api/upload-item-image', authenticateToken, requireAdmin, (req, res) => {
-  uploadSingle(req, res, async (err) => {
+  uploadBase64Single(req, res, async (err) => {
     if (err) {
       return res.status(400).json({ error: err.message });
     }
@@ -512,8 +508,8 @@ app.post('/api/upload-item-image', authenticateToken, requireAdmin, (req, res) =
       }
 
       const imageData = {
-        imageUrl: `${process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com'}/uploads/${req.file.filename}`,
-        fileName: req.file.filename,
+        imageUrl: bufferToBase64(req.file.buffer, req.file.mimetype),
+        fileName: req.file.originalname,
         fileSize: req.file.size,
         mimeType: req.file.mimetype
       };
@@ -533,20 +529,7 @@ app.delete('/api/menus/:id', authenticateToken, requireAdmin, async (req, res) =
       return res.status(404).json({ error: 'Menu not found' });
     }
 
-    // Delete all image files from filesystem
-    if (menu.images && menu.images.length > 0) {
-      const deletePromises = menu.images.map(async (image) => {
-        const filePath = path.join(uploadsDir, image.fileName);
-        try {
-          await fs.remove(filePath);
-        } catch (error) {
-          console.error(`Error deleting file ${image.fileName}:`, error);
-        }
-      });
-      await Promise.all(deletePromises);
-    }
-
-    // Delete from database
+    // Delete from database (images are stored as Base64, no file cleanup needed)
     await Menu.findByIdAndDelete(req.params.id);
     
     res.json({ message: 'Menu deleted successfully' });
