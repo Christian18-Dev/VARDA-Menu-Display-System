@@ -45,7 +45,7 @@ const displaySchema = new mongoose.Schema({
   },
   transitionType: {
     type: String,
-    enum: ['normal', 'scrolling'],
+    enum: ['normal', 'scrolling', 'push'],
     default: 'normal'
   }
 }, {

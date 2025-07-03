@@ -22,6 +22,12 @@ const DisplayPage = () => {
   const [scrollPosition, setScrollPosition] = useState(0)
   const [isScrolling, setIsScrolling] = useState(false)
   const [animationStarted, setAnimationStarted] = useState(false)
+  
+  // Push animation state
+  const [isPushing, setIsPushing] = useState(false)
+  const [pushDirection, setPushDirection] = useState('up')
+  const [nextImageIndex, setNextImageIndex] = useState(0)
+  const [nextMenuIndex, setNextMenuIndex] = useState(0)
 
   useEffect(() => {
     if (socket && displayId) {
@@ -88,53 +94,85 @@ const DisplayPage = () => {
 
   // Slideshow effect
   useEffect(() => {
-    if (currentMenus.length === 0 || transitionType !== 'normal') return
+    if (currentMenus.length === 0 || transitionType === 'scrolling') return
 
     const interval = setInterval(() => {
-      setCurrentImageIndex(prevIndex => {
-        const currentMenu = currentMenus[currentMenuIndex]
-        if (!currentMenu) return 0
+      const currentMenu = currentMenus[currentMenuIndex]
+      if (!currentMenu) return
+      
+      // For custom-based menus, we don't need image slideshow
+      if (currentMenu.menuType === 'custom') {
+        // Move to next menu after a delay
+        setCurrentMenuIndex(prevMenuIndex => {
+          const nextMenuIndex = prevMenuIndex + 1
+          if (nextMenuIndex >= currentMenus.length) {
+            return 0 // Loop back to first menu
+          }
+          return nextMenuIndex
+        })
+        return
+      }
+      
+      // For image-based menus, handle image slideshow
+      if (!currentMenu.images) return
+      
+      if (transitionType === 'push') {
+        // Handle push animation
+        const nextImgIndex = currentImageIndex + 1
+        let nextMenuIdx = currentMenuIndex
+        let nextImgIdx = nextImgIndex
         
-        // For custom-based menus, we don't need image slideshow
-        if (currentMenu.menuType === 'custom') {
-          // Move to next menu after a delay
-          setCurrentMenuIndex(prevMenuIndex => {
-            const nextMenuIndex = prevMenuIndex + 1
-            if (nextMenuIndex >= currentMenus.length) {
-              return 0 // Loop back to first menu
-            }
-            return nextMenuIndex
-          })
-          return 0
-        }
-        
-        // For image-based menus, handle image slideshow
-        if (!currentMenu.images) return 0
-        
-        const nextImageIndex = prevIndex + 1
-        if (nextImageIndex >= currentMenu.images.length) {
+        if (nextImgIndex >= currentMenu.images.length) {
           // Move to next menu
-          setCurrentMenuIndex(prevMenuIndex => {
-            const nextMenuIndex = prevMenuIndex + 1
-            if (nextMenuIndex >= currentMenus.length) {
-              return 0 // Loop back to first menu
-            }
-            return nextMenuIndex
-          })
-          return 0 // Reset image index for new menu
+          nextMenuIdx = currentMenuIndex + 1
+          if (nextMenuIdx >= currentMenus.length) {
+            nextMenuIdx = 0 // Loop back to first menu
+          }
+          nextImgIdx = 0 // Reset image index for new menu
         }
-        return nextImageIndex
-      })
+        
+        // Set next image/menu for push animation
+        setNextImageIndex(nextImgIdx)
+        setNextMenuIndex(nextMenuIdx)
+        setIsPushing(true)
+        
+        // After animation completes, update current indices
+        setTimeout(() => {
+          setCurrentImageIndex(nextImgIdx)
+          setCurrentMenuIndex(nextMenuIdx)
+          setIsPushing(false)
+        }, 500) // Animation duration
+      } else {
+        // Normal slideshow mode
+        setCurrentImageIndex(prevIndex => {
+          const nextImageIndex = prevIndex + 1
+          if (nextImageIndex >= currentMenu.images.length) {
+            // Move to next menu
+            setCurrentMenuIndex(prevMenuIndex => {
+              const nextMenuIndex = prevMenuIndex + 1
+              if (nextMenuIndex >= currentMenus.length) {
+                return 0 // Loop back to first menu
+              }
+              return nextMenuIndex
+            })
+            return 0 // Reset image index for new menu
+          }
+          return nextImageIndex
+        })
+      }
     }, slideshowInterval)
 
     return () => clearInterval(interval)
-  }, [currentMenus, currentMenuIndex, slideshowInterval, transitionType])
+  }, [currentMenus, currentMenuIndex, currentImageIndex, slideshowInterval, transitionType])
 
   // Reset indices when menus change
   useEffect(() => {
     setCurrentImageIndex(0)
     setCurrentMenuIndex(0)
     setScrollPosition(0)
+    setIsPushing(false)
+    setNextImageIndex(0)
+    setNextMenuIndex(0)
   }, [currentMenus])
 
   // Scrolling animation effect
@@ -201,6 +239,38 @@ const DisplayPage = () => {
       }
     }
   }, [transitionType, currentMenus, currentMenuIndex])
+
+  // Add CSS animation for push effect
+  useEffect(() => {
+    if (transitionType === 'push') {
+      const style = document.createElement('style')
+      
+      style.textContent = `
+        @keyframes pushUpAnimation {
+          0% {
+            transform: translateY(0vh);
+          }
+          100% {
+            transform: translateY(-100vh);
+          }
+        }
+        
+        @keyframes pushDownAnimation {
+          0% {
+            transform: translateY(100vh);
+          }
+          100% {
+            transform: translateY(0vh);
+          }
+        }
+      `
+      document.head.appendChild(style)
+      
+      return () => {
+        document.head.removeChild(style)
+      }
+    }
+  }, [transitionType])
 
   if (loading) {
     return (
@@ -367,6 +437,49 @@ const DisplayPage = () => {
                     }}
                   />
                 ))
+              })()}
+            </div>
+          ) : transitionType === 'push' && isPushing ? (
+            // Push animation mode
+            <div className="relative w-full h-full">
+              {/* Current image sliding up */}
+              <img
+                src={currentImage.imageUrl}
+                alt="Menu Display"
+                className="w-full h-screen object-cover absolute"
+                style={{
+                  top: 0,
+                  left: 0,
+                  width: '100vw',
+                  height: '100vh',
+                  objectFit: 'cover',
+                  animation: 'pushUpAnimation 0.5s ease-in-out forwards',
+                  zIndex: 1
+                }}
+              />
+              
+              {/* Next image sliding in from bottom */}
+              {(() => {
+                const nextMenu = currentMenus[nextMenuIndex]
+                const nextImage = nextMenu?.images?.[nextImageIndex]
+                if (!nextImage) return null
+                
+                return (
+                  <img
+                    src={nextImage.imageUrl}
+                    alt="Next Menu Display"
+                    className="w-full h-screen object-cover absolute"
+                    style={{
+                      top: 0,
+                      left: 0,
+                      width: '100vw',
+                      height: '100vh',
+                      objectFit: 'cover',
+                      animation: 'pushDownAnimation 0.5s ease-in-out forwards',
+                      zIndex: 2
+                    }}
+                  />
+                )
               })()}
             </div>
           ) : (

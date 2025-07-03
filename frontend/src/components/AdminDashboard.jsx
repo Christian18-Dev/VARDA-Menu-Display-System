@@ -689,9 +689,10 @@ const AdminDashboard = () => {
                               >
                                 <option value="normal">Normal Slideshow</option>
                                 <option value="scrolling">Scrolling Animation</option>
+                                <option value="push">Push Animation</option>
                               </select>
                               <p className="text-xs text-gray-500 mt-1">
-                                Normal: Fade between images | Scrolling: Images scroll down the screen
+                                Normal: Fade between images | Scrolling: Images scroll down the screen | Push: Images slide upward
                               </p>
                             </div>
                           </div>
