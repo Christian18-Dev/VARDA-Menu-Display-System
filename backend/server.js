@@ -13,21 +13,28 @@ const server = createServer(app);
 
 // Trust proxy for rate limiting (needed when deployed behind a proxy like Render)
 app.set('trust proxy', 1);
+
 // CORS configuration for both development and production
 const allowedOrigins = [
   "http://localhost:5173", 
   "http://localhost:3000", 
   "http://localhost:3001",
   "https://christian18-dev.github.io",
-  "https://varda-menu-display-system.onrender.com" // Your actual Render backend URL
+  "https://varda-menu-display-system.onrender.com", // Your actual Render backend URL
+  "https://christian18-dev.github.io/VARDA-Menu-Display-System" // GitHub Pages URL
 ];
 
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true
-  }
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
+  },
+  pingTimeout: 60000, // 60 seconds
+  pingInterval: 25000, // 25 seconds
+  transports: ['websocket', 'polling'],
+  allowEIO3: true
 });
 
 // Middleware
@@ -39,13 +46,20 @@ app.use(cors({
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log('CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Add OPTIONS handling for preflight requests
+app.options('*', cors());
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Note: No longer using local file storage - images are stored as Base64 in MongoDB
 
@@ -181,6 +195,18 @@ io.on('connection', (socket) => {
   connectedClients.set(socket.id, { connectionTime, displayId: null });
   
   logSocketEvent('connect', socket.id, `Total clients: ${connectedClients.size}`);
+
+  // Add error handling for socket
+  socket.on('error', (error) => {
+    console.error('Socket error:', error);
+    logSocketEvent('error', socket.id, `Error: ${error.message}`);
+  });
+
+  // Add connection error handling
+  socket.on('connect_error', (error) => {
+    console.error('Socket connection error:', error);
+    logSocketEvent('connect_error', socket.id, `Error: ${error.message}`);
+  });
 
   // Handle display registration
   socket.on('register-display', async (displayId) => {

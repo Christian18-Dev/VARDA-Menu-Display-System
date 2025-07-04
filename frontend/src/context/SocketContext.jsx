@@ -18,17 +18,24 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     let reconnectAttempts = 0
-    const maxReconnectAttempts = 5
+    const maxReconnectAttempts = 10 // Increased from 5
     const baseDelay = 1000
+    let reconnectTimeout = null
 
     const connectSocket = () => {
       // Use environment variable for backend URL, fallback to localhost for development
       const backendUrl = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://varda-menu-display-system.onrender.com')
+      
+      console.log('Attempting to connect to:', backendUrl)
+      
       const newSocket = io(backendUrl, {
         transports: ['websocket', 'polling'],
-        timeout: 20000,
+        timeout: 30000, // Increased timeout to 30 seconds
         reconnection: false, // We'll handle reconnection manually
-        forceNew: true
+        forceNew: true,
+        upgrade: true,
+        rememberUpgrade: true,
+        maxReconnectionAttempts: 0 // Disable built-in reconnection
       })
 
       newSocket.on('connect', () => {
@@ -36,6 +43,12 @@ export const SocketProvider = ({ children }) => {
         setIsConnected(true)
         setConnectionError(null)
         reconnectAttempts = 0 // Reset attempts on successful connection
+        
+        // Clear any pending reconnection timeout
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout)
+          reconnectTimeout = null
+        }
       })
 
       newSocket.on('connect_error', (error) => {
@@ -43,13 +56,19 @@ export const SocketProvider = ({ children }) => {
         setIsConnected(false)
         setConnectionError(error.message)
         
+        // Clear any existing timeout
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout)
+        }
+        
         // Attempt to reconnect with exponential backoff
         if (reconnectAttempts < maxReconnectAttempts) {
-          const delay = baseDelay * Math.pow(2, reconnectAttempts)
+          const delay = Math.min(baseDelay * Math.pow(2, reconnectAttempts), 30000) // Cap at 30 seconds
           console.log(`Reconnection attempt ${reconnectAttempts + 1} in ${delay}ms`)
           
-          setTimeout(() => {
+          reconnectTimeout = setTimeout(() => {
             reconnectAttempts++
+            console.log(`Attempting reconnection ${reconnectAttempts}/${maxReconnectAttempts}`)
             newSocket.connect()
           }, delay)
         } else {
@@ -62,14 +81,20 @@ export const SocketProvider = ({ children }) => {
         console.log('Disconnected from server:', reason)
         setIsConnected(false)
         
+        // Clear any existing timeout
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout)
+        }
+        
         // Only attempt reconnection if it wasn't a manual disconnect
         if (reason !== 'io client disconnect' && reason !== 'io server disconnect') {
           if (reconnectAttempts < maxReconnectAttempts) {
-            const delay = baseDelay * Math.pow(2, reconnectAttempts)
+            const delay = Math.min(baseDelay * Math.pow(2, reconnectAttempts), 30000)
             console.log(`Reconnection attempt ${reconnectAttempts + 1} in ${delay}ms`)
             
-            setTimeout(() => {
+            reconnectTimeout = setTimeout(() => {
               reconnectAttempts++
+              console.log(`Attempting reconnection ${reconnectAttempts}/${maxReconnectAttempts}`)
               newSocket.connect()
             }, delay)
           }
@@ -93,6 +118,15 @@ export const SocketProvider = ({ children }) => {
         setConnectionError('Unable to reconnect to server')
       })
 
+      // Add ping/pong monitoring
+      newSocket.on('ping', () => {
+        console.log('Ping sent to server')
+      })
+
+      newSocket.on('pong', (latency) => {
+        console.log('Pong received from server, latency:', latency, 'ms')
+      })
+
       setSocket(newSocket)
 
       return newSocket
@@ -101,6 +135,11 @@ export const SocketProvider = ({ children }) => {
     const socketInstance = connectSocket()
 
     return () => {
+      // Clear any pending reconnection timeout
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
+      
       if (socketInstance) {
         socketInstance.disconnect()
       }
