@@ -360,14 +360,27 @@ io.on('connection', (socket) => {
     console.log('📊 SERVER: Current connected clients:', connectedClients.size);
     
     try {
-      // Get delay from request or use default (1 second)
-      const delay = data?.delay || 1000;
+      // Ensure delay is a safe primitive number to prevent serialization issues
+      let delay = 1000; // Default delay
+      if (data && typeof data.delay === 'number' && data.delay > 0 && data.delay <= 30000) {
+        delay = Math.floor(data.delay); // Ensure it's an integer
+      } else if (data && data.delay) {
+        const parsed = parseInt(data.delay);
+        if (!isNaN(parsed) && parsed > 0 && parsed <= 30000) {
+          delay = parsed;
+        }
+      }
+      
       console.log('⏱️ SERVER: Sync delay set to:', delay + 'ms');
+      
+      // Create a clean payload object to prevent circular references
+      const syncPayload = { delay: delay };
       
       // Broadcast sync event to all connected displays with delay
       console.log('📡 SERVER: Broadcasting display-sync-refresh to all clients...');
-      io.emit('display-sync-refresh', { delay });
+      io.emit('display-sync-refresh', syncPayload);
       
+      // Send success response with clean data
       socket.emit('sync-success', { 
         message: `All displays will sync in ${delay/1000} second(s)...` 
       });

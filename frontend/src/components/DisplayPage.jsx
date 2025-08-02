@@ -76,9 +76,18 @@ const DisplayPage = () => {
       socket.on('display-sync-refresh', (data) => {
         console.log('Received sync refresh signal, preparing to reload page...')
         
-        // Add a small delay to ensure all displays receive the message before refreshing
-        // This helps synchronize the refresh timing across all displays
-        const delay = data?.delay || 1000 // Default 1 second delay
+        // Ensure delay is a safe number to prevent issues
+        let delay = 1000 // Default 1 second delay
+        if (data && typeof data.delay === 'number' && data.delay > 0 && data.delay <= 30000) {
+          delay = Math.floor(data.delay)
+        } else if (data && data.delay) {
+          const parsed = parseInt(data.delay)
+          if (!isNaN(parsed) && parsed > 0 && parsed <= 30000) {
+            delay = parsed
+          }
+        }
+        
+        console.log('Display will refresh in', delay + 'ms')
         
         setTimeout(() => {
           console.log('Syncing display refresh now...')

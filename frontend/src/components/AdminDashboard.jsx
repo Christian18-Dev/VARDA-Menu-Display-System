@@ -367,12 +367,15 @@ const AdminDashboard = () => {
   }
 
   const handleSyncAllDisplays = (delay = 1000) => {
-    console.log('🔄 Sync All Displays button clicked - initiating sync with delay:', delay + 'ms')
+    // Ensure delay is always a primitive number to prevent Socket.IO serialization issues
+    const numericDelay = typeof delay === 'number' ? delay : parseInt(delay) || 1000
+    console.log('🔄 Sync All Displays button clicked - initiating sync with delay:', numericDelay + 'ms')
     
     if (socket && isConnected) {
       console.log('📡 Emitting sync-all-displays event to server')
-      socket.emit('sync-all-displays', { delay })
-      setSuccessMessage(`Syncing all displays in ${delay/1000} second(s)...`)
+      // Pass delay as a primitive number, not in an object that might have circular references
+      socket.emit('sync-all-displays', { delay: numericDelay })
+      setSuccessMessage(`Syncing all displays in ${numericDelay/1000} second(s)...`)
       setTimeout(() => setSuccessMessage(''), 4000)
     } else {
       console.log('❌ Cannot sync - not connected to server')
