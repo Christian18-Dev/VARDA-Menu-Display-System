@@ -33,6 +33,16 @@ const DisplayPage = () => {
     if (socket && displayId) {
       // Register this display with the server
       socket.emit('register-display', displayId)
+      
+      // Set up ping interval (every 30 seconds)
+      const pingInterval = setInterval(() => {
+        if (socket.connected) {
+          socket.emit('ping')
+        }
+      }, 30000)
+      
+      // Initial ping
+      socket.emit('ping')
 
       // Listen for display registration response
       socket.on('display-registered', (data) => {
@@ -62,9 +72,25 @@ const DisplayPage = () => {
         }
       })
 
+      // Listen for sync/reset event
+      socket.on('display-sync-refresh', (data) => {
+        console.log('Received sync refresh signal, preparing to reload page...')
+        
+        // Add a small delay to ensure all displays receive the message before refreshing
+        // This helps synchronize the refresh timing across all displays
+        const delay = data?.delay || 1000 // Default 1 second delay
+        
+        setTimeout(() => {
+          console.log('Syncing display refresh now...')
+          window.location.reload()
+        }, delay)
+      })
+
       return () => {
+        clearInterval(pingInterval)
         socket.off('display-registered')
         socket.off('menus-updated')
+        socket.off('display-sync-refresh')
       }
     }
   }, [socket, displayId])

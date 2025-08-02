@@ -144,6 +144,9 @@ const fixImageUrls = (data) => {
 // Socket connection tracking
 const connectedClients = new Map();
 
+// Track display status
+const displayStatus = new Map();
+
 // Helper function for formatted logging
 const logSocketEvent = (event, socketId, additionalInfo = '') => {
   const timestamp = new Date().toISOString();
@@ -151,11 +154,15 @@ const logSocketEvent = (event, socketId, additionalInfo = '') => {
   const eventEmoji = event === 'connect' ? '🔗' : event === 'disconnect' ? '🔌' : '📡';
   const eventText = event === 'connect' ? 'CONNECTED' : event === 'disconnect' ? 'DISCONNECTED' : event.toUpperCase();
   
-  console.log(`${eventEmoji} [${timestamp}] ${eventText} | ID: ${shortId}... | ${additionalInfo}`);
+  // Get display ID if available
+  const clientInfo = connectedClients.get(socketId);
+  const displayInfo = clientInfo?.displayId ? ` | Display: ${clientInfo.displayId}` : '';
+  
+  console.log(`${eventEmoji} [${timestamp}] ${eventText} | ID: ${shortId}...${displayInfo} | ${additionalInfo}`);
 };
 
 // Periodic status logging every 60 seconds
-const logSystemStatus = () => {
+const logSystemStatus = async () => {
   const timestamp = new Date().toISOString();
   const totalClients = connectedClients.size;
   
@@ -163,38 +170,109 @@ const logSystemStatus = () => {
   let displayClients = 0;
   let adminClients = 0;
   const connectedDisplays = [];
+  const displayStatuses = [];
   
+  // Update display statuses
+  const now = new Date();
   connectedClients.forEach((clientInfo, socketId) => {
     if (clientInfo.displayId) {
       displayClients++;
+      const lastSeen = clientInfo.lastPing || clientInfo.connectionTime;
+      const timeSinceLastSeen = Math.floor((now - lastSeen) / 1000); // in seconds
+      const isHealthy = timeSinceLastSeen < 120; // 2 minutes threshold
+      
+      // Update display status
+      displayStatus.set(clientInfo.displayId, {
+        displayId: clientInfo.displayId,
+        socketId: socketId,
+        lastSeen: lastSeen.toISOString(),
+        status: isHealthy ? 'online' : 'stale',
+        uptime: Math.floor((now - clientInfo.connectionTime) / 1000) + 's',
+        lastPing: timeSinceLastSeen + 's ago'
+      });
+      
       connectedDisplays.push(clientInfo.displayId);
     } else {
       adminClients++;
     }
   });
   
-  console.log(`\n📊 [${timestamp}] SYSTEM STATUS | Total Clients: ${totalClients} | Displays: ${displayClients} | Admin: ${adminClients}`);
-  
-  if (connectedDisplays.length > 0) {
-    console.log(`   📺 Connected Displays: ${connectedDisplays.join(', ')}`);
+  // Get all displays from database to show their status
+  try {
+    const displays = await Display.find({});
+    
+    // Log system status header
+    console.log(`\n📊 [${timestamp}] ========== SYSTEM STATUS ==========`);
+    console.log(`🌐 Connections: ${totalClients} total (${displayClients} displays, ${adminClients} admin)`);
+    
+    // Log each display status
+    if (displays.length > 0) {
+      console.log('\n📺 DISPLAY STATUS:');
+      console.log(''.padEnd(80, '-'));
+      console.log('Display ID'.padEnd(15) + 'Status'.padEnd(10) + 'Last Seen'.padEnd(25) + 'Uptime'.padEnd(15) + 'Location');
+      console.log(''.padEnd(80, '-'));
+      
+      for (const display of displays) {
+        const status = displayStatus.get(display.displayId) || {
+          status: 'offline',
+          lastSeen: 'N/A',
+          uptime: 'N/A',
+          lastPing: 'N/A'
+        };
+        
+        const statusEmoji = status.status === 'online' ? '🟢' : status.status === 'stale' ? '🟡' : '🔴';
+        const lastSeenTime = status.lastSeen !== 'N/A' ? new Date(status.lastSeen).toLocaleString() : 'N/A';
+        
+        console.log(
+          `${display.displayId.padEnd(15)}` +
+          `${statusEmoji} ${status.status.padEnd(8)}` +
+          `${lastSeenTime.padEnd(25)}` +
+          `${status.uptime.padEnd(15)}` +
+          `${display.location || 'N/A'}`
+        );
+      }
+    } else {
+      console.log('\nℹ️  No displays registered in the system');
+    }
+    
+    // Log system resources
+    const memoryUsage = process.memoryUsage();
+    console.log('\n💻 SYSTEM RESOURCES:');
+    console.log(`   Memory Usage: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB / ${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`);
+    console.log(`   Uptime: ${Math.floor(process.uptime() / 60)} minutes`);
+    
+  } catch (error) {
+    console.error('Error fetching display status:', error);
   }
   
-  if (totalClients === 0) {
-    console.log(`   ⚠️  No active connections`);
-  }
-  
-  console.log(''); // Empty line for better readability
+  console.log(''.padEnd(80, '=') + '\n');
 };
 
 // Start periodic logging
 setInterval(logSystemStatus, 60000); // 60 seconds = 60000ms
 
+// Handle display pings
+const handlePing = (socketId) => {
+  const clientInfo = connectedClients.get(socketId);
+  if (clientInfo) {
+    clientInfo.lastPing = new Date();
+    connectedClients.set(socketId, clientInfo);
+  }
+};
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   const connectionTime = new Date();
-  connectedClients.set(socket.id, { connectionTime, displayId: null });
+  connectedClients.set(socket.id, { 
+    connectionTime, 
+    displayId: null,
+    lastPing: connectionTime
+  });
   
   logSocketEvent('connect', socket.id, `Total clients: ${connectedClients.size}`);
+  
+  // Set up ping handler
+  socket.on('ping', () => handlePing(socket.id));
 
   // Add error handling for socket
   socket.on('error', (error) => {
@@ -244,33 +322,61 @@ io.on('connection', (socket) => {
       const display = await Display.findOne({ displayId });
       if (display) {
         // Update menus with order
-        display.currentMenus = menuIds.map((menuId, index) => ({
+        const menusWithOrder = menuIds.map((menuId, index) => ({
           menu: menuId,
           order: index
         }));
         
-        if (slideshowInterval) {
-          display.slideshowInterval = slideshowInterval;
-        }
-        
-        if (transitionType) {
-          display.transitionType = transitionType;
-        }
-        
+        display.currentMenus = menusWithOrder;
+        display.slideshowInterval = slideshowInterval || 5000;
+        display.transitionType = transitionType || 'normal';
+        display.lastUpdated = new Date();
         await display.save();
         
-        // Emit to specific display
-        io.to(`display-${displayId}`).emit('menus-updated', { menuIds, slideshowInterval, transitionType });
+        // Emit update to all connected clients for this display
+        io.emit('menus-updated', {
+          displayId,
+          menuIds: menusWithOrder,
+          slideshowInterval: display.slideshowInterval,
+          transitionType: display.transitionType
+        });
         
-        // Emit to admin for confirmation
-        socket.emit('update-success', { displayId, menuIds, slideshowInterval, transitionType });
-        
-        logSocketEvent('update-display', socket.id, `Display: ${displayId} | Menus: ${menuIds.length} | Interval: ${slideshowInterval}s`);
+        socket.emit('update-success', { message: 'Display updated successfully' });
+        logSocketEvent('update-display', socket.id, `SUCCESS - Display: ${displayId} | Menus: ${menuIds.length} | Interval: ${slideshowInterval}ms | Transition: ${transitionType}`);
+      } else {
+        socket.emit('update-error', { message: 'Display not found' });
+        logSocketEvent('update-display', socket.id, `ERROR - Display not found: ${displayId}`);
       }
     } catch (error) {
       console.error('Update display error:', error);
       socket.emit('update-error', { message: 'Update failed' });
       logSocketEvent('update-display', socket.id, `ERROR - ${error.message}`);
+    }
+  });
+
+  // Handle sync/reset all displays
+  socket.on('sync-all-displays', (data) => {
+    console.log('🔄 SERVER: Received sync-all-displays request from admin');
+    console.log('📊 SERVER: Current connected clients:', connectedClients.size);
+    
+    try {
+      // Get delay from request or use default (1 second)
+      const delay = data?.delay || 1000;
+      console.log('⏱️ SERVER: Sync delay set to:', delay + 'ms');
+      
+      // Broadcast sync event to all connected displays with delay
+      console.log('📡 SERVER: Broadcasting display-sync-refresh to all clients...');
+      io.emit('display-sync-refresh', { delay });
+      
+      socket.emit('sync-success', { 
+        message: `All displays will sync in ${delay/1000} second(s)...` 
+      });
+      console.log('✅ SERVER: Sync broadcast completed successfully');
+      logSocketEvent('sync-all-displays', socket.id, `SUCCESS - Broadcasted sync to ${connectedClients.size} clients with ${delay}ms delay`);
+    } catch (error) {
+      console.error('❌ SERVER: Sync all displays error:', error);
+      socket.emit('sync-error', { message: 'Sync failed' });
+      logSocketEvent('sync-all-displays', socket.id, `ERROR - ${error.message}`);
     }
   });
 

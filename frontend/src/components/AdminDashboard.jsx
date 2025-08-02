@@ -366,6 +366,21 @@ const AdminDashboard = () => {
     setShowTextMenuCreator(true)
   }
 
+  const handleSyncAllDisplays = (delay = 1000) => {
+    console.log('🔄 Sync All Displays button clicked - initiating sync with delay:', delay + 'ms')
+    
+    if (socket && isConnected) {
+      console.log('📡 Emitting sync-all-displays event to server')
+      socket.emit('sync-all-displays', { delay })
+      setSuccessMessage(`Syncing all displays in ${delay/1000} second(s)...`)
+      setTimeout(() => setSuccessMessage(''), 4000)
+    } else {
+      console.log('❌ Cannot sync - not connected to server')
+      setErrorMessage('Not connected to server')
+      setTimeout(() => setErrorMessage(''), 3000)
+    }
+  }
+
   // Filter menus based on search and category
   const filteredMenus = menus.filter(menu => {
     const matchesSearch = menu.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -415,6 +430,19 @@ const AdminDashboard = () => {
               >
                 <RefreshCw className="h-4 w-4" />
                 <span>Refresh</span>
+              </button>
+              <button
+                onClick={handleSyncAllDisplays}
+                disabled={!isConnected}
+                className={`flex items-center space-x-2 px-3 py-2 text-sm rounded-md transition-colors ${
+                  isConnected 
+                    ? 'bg-blue-100 hover:bg-blue-200 text-blue-700' 
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+                title="Refresh and sync all connected displays"
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span>Sync All Displays</span>
               </button>
               <div className="flex items-center space-x-2">
                 {isConnected ? (
