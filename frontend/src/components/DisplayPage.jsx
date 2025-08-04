@@ -63,6 +63,12 @@ const DisplayPage = () => {
 
       // Listen for menu updates
       socket.on('menus-updated', async (data) => {
+        // Safety check: only process updates meant for this display
+        if (data.displayId && data.displayId !== displayId) {
+          console.log(`Ignoring menu update for display ${data.displayId}, this is display ${displayId}`);
+          return;
+        }
+        
         if (data.menuIds && data.menuIds.length > 0) {
           await fetchMenusData(data.menuIds.map((menuId, index) => ({ menu: menuId, order: index })))
           setSlideshowInterval(data.slideshowInterval || 5000)

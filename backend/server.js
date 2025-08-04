@@ -199,7 +199,7 @@ const logSystemStatus = async () => {
   
   // Get all displays from database to show their status
   try {
-    const displays = await Display.find({});
+    const displays = await Display.find({}).sort({ displayId: 1 });
     
     // Log system status header
     console.log(`\n📊 [${timestamp}] ========== SYSTEM STATUS ==========`);
@@ -209,26 +209,61 @@ const logSystemStatus = async () => {
     if (displays.length > 0) {
       console.log('\n📺 DISPLAY STATUS:');
       console.log(''.padEnd(80, '-'));
-      console.log('Display ID'.padEnd(15) + 'Status'.padEnd(10) + 'Last Seen'.padEnd(25) + 'Uptime'.padEnd(15) + 'Location');
+      console.log(
+        'Display ID'.padEnd(15) + 
+        'Status'.padStart(10).padEnd(12) + 
+        'Last Seen'.padStart(19).padEnd(25) + 
+        'Uptime'.padEnd(15) + 
+        'Location'
+      );
       console.log(''.padEnd(80, '-'));
       
+      const now = new Date();
+      
       for (const display of displays) {
-        const status = displayStatus.get(display.displayId) || {
+        let status = {
           status: 'offline',
-          lastSeen: 'N/A',
+          lastSeen: display.lastSeen ? new Date(display.lastSeen) : null,
           uptime: 'N/A',
           lastPing: 'N/A'
         };
         
-        const statusEmoji = status.status === 'online' ? '🟢' : status.status === 'stale' ? '🟡' : '🔴';
-        const lastSeenTime = status.lastSeen !== 'N/A' ? new Date(status.lastSeen).toLocaleString() : 'N/A';
+        // Check if display is in our connected clients
+        const connectedClient = Array.from(connectedClients.entries())
+          .find(([_, client]) => client.displayId === display.displayId);
+          
+        if (connectedClient) {
+          const [socketId, clientInfo] = connectedClient;
+          const lastPing = clientInfo.lastPing || clientInfo.connectionTime;
+          const timeSinceLastPing = Math.floor((now - lastPing) / 1000);
+          
+          status = {
+            status: timeSinceLastPing < 120 ? 'online' : 'stale',
+            lastSeen: lastPing,
+            uptime: Math.floor((now - clientInfo.connectionTime) / 1000) + 's',
+            lastPing: timeSinceLastPing + 's ago'
+          };
+        } else if (status.lastSeen) {
+          // For disconnected displays, use lastSeen from database
+          const timeSinceLastSeen = Math.floor((now - status.lastSeen) / 1000);
+          status.status = timeSinceLastSeen < 300 ? 'offline (recent)' : 'offline';
+          status.uptime = 'N/A';
+          status.lastPing = timeSinceLastSeen + 's ago';
+        }
+        
+        const statusText = status.status.replace(' (recent)', '');
+        const statusEmoji = status.status.includes('online') ? '🟢' : 
+                          status.status.includes('stale') ? '🟡' : '🔴';
+                          
+        const lastSeenTime = status.lastSeen ? 
+          status.lastSeen.toLocaleString('en-US', { timeZone: 'Asia/Manila' }) : 'N/A';
         
         console.log(
-          `${display.displayId.padEnd(15)}` +
-          `${statusEmoji} ${status.status.padEnd(8)}` +
-          `${lastSeenTime.padEnd(25)}` +
-          `${status.uptime.padEnd(15)}` +
-          `${display.location || 'N/A'}`
+          display.displayId.padEnd(15) +
+          `${statusEmoji} ${statusText}`.padStart(11).padEnd(12) +
+          lastSeenTime.padStart(19).padEnd(25) +
+          status.uptime.padEnd(15) +
+          (display.location || 'N/A')
         );
       }
     } else {
@@ -333,13 +368,29 @@ io.on('connection', (socket) => {
         display.lastUpdated = new Date();
         await display.save();
         
-        // Emit update to all connected clients for this display
-        io.emit('menus-updated', {
-          displayId,
-          menuIds: menusWithOrder,
-          slideshowInterval: display.slideshowInterval,
-          transitionType: display.transitionType
+        // Emit update only to the specific display being updated
+        // Find all sockets registered for this specific displayId
+        const targetSockets = [];
+        for (const [socketId, socketDisplayId] of connectedClients.entries()) {
+          if (socketDisplayId === displayId) {
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket) {
+              targetSockets.push(socket);
+            }
+          }
+        }
+        
+        // Send update only to sockets connected to this display
+        targetSockets.forEach(targetSocket => {
+          targetSocket.emit('menus-updated', {
+            displayId,
+            menuIds: menusWithOrder,
+            slideshowInterval: display.slideshowInterval,
+            transitionType: display.transitionType
+          });
         });
+        
+        logSocketEvent('update-display', socket.id, `TARGETED UPDATE - Display: ${displayId} | Sent to ${targetSockets.length} socket(s) | Menus: ${menuIds.length} | Interval: ${slideshowInterval}ms | Transition: ${transitionType}`);
         
         socket.emit('update-success', { message: 'Display updated successfully' });
         logSocketEvent('update-display', socket.id, `SUCCESS - Display: ${displayId} | Menus: ${menuIds.length} | Interval: ${slideshowInterval}ms | Transition: ${transitionType}`);
@@ -393,11 +444,26 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     const clientInfo = connectedClients.get(socket.id);
     const connectionDuration = clientInfo ? Math.round((new Date() - clientInfo.connectionTime) / 1000) : 0;
-    const displayInfo = clientInfo?.displayId ? ` | Display: ${clientInfo.displayId}` : '';
+    const displayId = clientInfo?.displayId;
+    const displayInfo = displayId ? ` | Display: ${displayId}` : '';
     
+    // Update the display's lastSeen timestamp in the database
+    if (displayId) {
+      try {
+        await Display.updateOne(
+          { displayId },
+          { lastSeen: new Date() }
+        );
+        logSocketEvent('disconnect', socket.id, `Updated lastSeen for display: ${displayId}`);
+      } catch (error) {
+        console.error('Error updating display lastSeen:', error);
+      }
+    }
+    
+    // Clean up the client tracking
     connectedClients.delete(socket.id);
     
     logSocketEvent('disconnect', socket.id, `Duration: ${connectionDuration}s${displayInfo} | Remaining clients: ${connectedClients.size}`);

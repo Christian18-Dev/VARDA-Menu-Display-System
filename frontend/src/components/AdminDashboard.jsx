@@ -196,7 +196,8 @@ const AdminDashboard = () => {
   const handleUpdateSuccess = (data) => {
     console.log('Update successful:', data)
     setSuccessMessage('Settings updated successfully!')
-    fetchData() // Refresh data
+    // Removed fetchData() call - display updates are now handled locally for better performance
+    // fetchData() // Refresh data
   }
 
   const handleMenuUpload = async (e) => {
@@ -257,6 +258,29 @@ const AdminDashboard = () => {
           transitionType: displayData.transitionType
         })
       }
+      
+      // Optimized: Update only the specific display instead of full refresh
+      setDisplays(prevDisplays => 
+        prevDisplays.map(display => {
+          if (display.displayId === displayId) {
+            // Update the display with new menu assignments
+            const updatedMenus = displayData.menuIds.map((menuId, index) => ({
+              menu: menus.find(m => m._id === menuId),
+              order: index
+            })).filter(cm => cm.menu) // Remove any menus that weren't found
+            
+            return {
+              ...display,
+              currentMenus: updatedMenus,
+              slideshowInterval: displayData.slideshowInterval,
+              transitionType: displayData.transitionType,
+              lastUpdated: new Date().toISOString()
+            }
+          }
+          return display
+        })
+      )
+      
       setSuccessMessage('Display settings updated!')
     } catch (error) {
       console.error('Assign menus error:', error)
