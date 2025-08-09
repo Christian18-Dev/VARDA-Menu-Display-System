@@ -6,6 +6,7 @@ import {
   getDisplays, 
   getMenus, 
   uploadMenu, 
+  updateMenu,
   deleteMenu, 
   updateDisplayMenus,
   createDisplay,
@@ -33,7 +34,10 @@ import {
   Type,
   Edit3,
   LogOut,
-  User
+  User,
+  Save,
+  X,
+  FileText
 } from 'lucide-react'
 import TextMenuCreator from './TextMenuCreator'
 
@@ -70,13 +74,17 @@ const ConfirmModal = ({ open, title, message, onCancel, onConfirm, confirmText =
 const GlassModal = ({ open, onClose, title, children }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-8 max-w-lg w-full animate-fade-in">
-        <div className="flex justify-between items-center mb-4">
-          <h4 className="text-lg font-bold text-gray-900">{title}</h4>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl font-bold leading-none px-2">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white/90 backdrop-blur-lg rounded-2xl shadow-2xl border border-white/20 w-full max-w-4xl overflow-hidden">
+        <div className="border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        {children}
+        <div className="p-6 max-h-[80vh] overflow-y-auto">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -110,7 +118,10 @@ const AdminDashboard = () => {
     description: '',
     category: 'general',
     branch: 'Ateneo',
-    images: []
+    images: [],
+    _id: null, // Add ID field for editing
+    existingImages: [], // Track existing images for editing
+    menuType: 'image' // 'image' or 'custom'
   })
   const [displayForm, setDisplayForm] = useState({
     name: '',
@@ -123,8 +134,9 @@ const AdminDashboard = () => {
   // Accordion state for expanded display
   const [expandedDisplayId, setExpandedDisplayId] = useState(null);
 
-  // Modal state for delete confirmation
+  // Modal states
   const [modal, setModal] = useState({ open: false, type: '', id: null, name: '', loading: false });
+  const [showMenuModal, setShowMenuModal] = useState(false);
 
   useEffect(() => {
     fetchData()
@@ -202,7 +214,7 @@ const AdminDashboard = () => {
 
   const handleMenuUpload = async (e) => {
     e.preventDefault()
-    if (!menuForm.images.length) {
+    if (!menuForm.images.length && !menuForm.existingImages?.length) {
       setErrorMessage('Please select at least one image')
       return
     }
@@ -210,17 +222,64 @@ const AdminDashboard = () => {
     setUploading(true)
     try {
       const formData = new FormData()
-      menuForm.images.forEach((image, index) => {
-        formData.append('menuImages', image)
-      })
-      formData.append('name', menuForm.name)
-      formData.append('description', menuForm.description)
-      formData.append('category', menuForm.category)
-      formData.append('branch', menuForm.branch)
+      
+      // Add new images
+      if (menuForm.images && menuForm.images.length > 0) {
+        menuForm.images.forEach((image, index) => {
+          if (image instanceof File) {
+            formData.append('menuImages', image);
+          }
+        });
+      }
+      
+      // If editing, include the menu ID and existing images
+      if (menuForm._id) {
+        formData.append('_id', menuForm._id);
+        if (menuForm.existingImages && menuForm.existingImages.length > 0) {
+          formData.append('existingImages', JSON.stringify(menuForm.existingImages));
+        }
+      }
+      
+      // Add text fields
+      formData.append('name', menuForm.name);
+      formData.append('description', menuForm.description || '');
+      formData.append('category', menuForm.category || 'general');
+      formData.append('branch', menuForm.branch || 'Ateneo');
 
-      await uploadMenu(formData)
-      setMenuForm({ name: '', description: '', category: 'general', branch: 'Ateneo', images: [] })
-      setSuccessMessage('Menu uploaded successfully!')
+      // For debugging
+      console.log('Sending form data:', {
+        name: menuForm.name,
+        description: menuForm.description,
+        category: menuForm.category,
+        branch: menuForm.branch,
+        existingImages: menuForm.existingImages ? menuForm.existingImages.length : 0,
+        newImages: menuForm.images ? menuForm.images.length : 0
+      });
+
+      // Use updateMenu for existing menus, uploadMenu for new ones
+      if (menuForm._id) {
+        console.log('Updating existing menu with ID:', menuForm._id);
+        await updateMenu(menuForm._id, formData);
+        setSuccessMessage('Menu updated successfully!');
+      } else {
+        console.log('Creating new menu');
+        await uploadMenu(formData);
+        setSuccessMessage('Menu created successfully!');
+      }
+      
+      // Reset form after successful upload/update
+      setMenuForm({ 
+        name: '', 
+        description: '', 
+        category: 'general', 
+        branch: 'Ateneo', 
+        images: [],
+        _id: null,
+        existingImages: [],
+        menuType: 'image' // Ensure menuType is reset
+      })
+      setShowMenuModal(false) // Close the menu modal
+      setShowTextMenuCreator(false) // Ensure text menu creator is closed
       fetchData()
     } catch (error) {
       console.error('Upload error:', error)
@@ -381,14 +440,63 @@ const AdminDashboard = () => {
   }
 
   const handleEditTextMenu = (menu) => {
-    setEditingMenu(menu)
-    setShowTextMenuCreator(true)
-  }
+    setMenuForm({
+      name: menu.name,
+      description: menu.description || '',
+      category: menu.category || 'general',
+      branch: menu.branch || 'Ateneo',
+      _id: menu._id, // Store the menu ID for updating
+      menuType: 'custom',
+      menuItems: menu.menuItems || []
+    });
+    setShowMenuModal(true);
+  };
+
+  const handleNewImageMenu = () => {
+    setMenuForm({
+      name: '',
+      description: '',
+      category: 'general',
+      branch: 'Ateneo',
+      images: [],
+      _id: null,
+      existingImages: [],
+      menuType: 'image'
+    });
+    setShowMenuModal(true);
+  };
+
+  const handleNewTextMenu = () => {
+    setMenuForm({
+      name: '',
+      description: '',
+      category: 'general',
+      branch: 'Ateneo',
+      _id: null,
+      menuType: 'custom',
+      menuItems: []
+    });
+    setShowMenuModal(true);
+  };
 
   const handleCreateTextMenu = () => {
     setEditingMenu(null)
     setShowTextMenuCreator(true)
   }
+
+  const handleEditImageMenu = (menu) => {
+    setMenuForm({
+      name: menu.name,
+      description: menu.description || '',
+      category: menu.category || 'general',
+      branch: menu.branch || 'Ateneo',
+      images: [], // New images to be added
+      _id: menu._id, // Store the menu ID for updating
+      existingImages: menu.images || [], // Store existing images
+      menuType: 'image'
+    });
+    setShowMenuModal(true);
+  };
 
   const handleSyncAllDisplays = (delay = 1000) => {
     // Ensure delay is always a primitive number to prevent Socket.IO serialization issues
@@ -836,125 +944,200 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* Menus Tab */}
-        {activeTab === 'menus' && (
-          <div className="space-y-6">
-            {/* Upload Menu Section */}
-            <div className="bg-white rounded-lg shadow-sm border">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Upload New Menu</h3>
-              </div>
-              <div className="p-6">
-                <form onSubmit={handleMenuUpload} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Menu Name *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Enter menu name"
-                        value={menuForm.name}
-                        onChange={(e) => setMenuForm({...menuForm, name: e.target.value})}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Category
-                      </label>
-                      <select
-                        value={menuForm.category}
-                        onChange={(e) => setMenuForm({...menuForm, category: e.target.value})}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      >
-                        <option value="general">General</option>
-                        <option value="breakfast">Breakfast</option>
-                        <option value="lunch">Lunch</option>
-                        <option value="dinner">Dinner</option>
-                        <option value="drinks">Drinks</option>
-                      </select>
-                    </div>
+        {/* Menu Modal */}
+        <GlassModal 
+          open={showMenuModal} 
+          onClose={() => setShowMenuModal(false)}
+          title={menuForm.menuType === 'custom' ? (menuForm._id ? 'Edit Text Menu' : 'Create Text Menu') : (menuForm._id ? 'Edit Image Menu' : 'Create Image Menu')}
+        >
+          <div className="p-6 max-h-[80vh] overflow-y-auto">
+            {menuForm.menuType === 'image' ? (
+              <form onSubmit={handleMenuUpload} className="space-y-6" id="menu-upload-form">
+                <div>
+                  <label htmlFor="menu-name" className="block text-sm font-medium text-gray-700">
+                    Menu Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="menu-name"
+                    required
+                    value={menuForm.name}
+                    onChange={(e) => setMenuForm({ ...menuForm, name: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="e.g., Lunch Specials"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="menu-description" className="block text-sm font-medium text-gray-700">
+                    Description
+                  </label>
+                  <textarea
+                    id="menu-description"
+                    rows={3}
+                    value={menuForm.description || ''}
+                    onChange={(e) => setMenuForm({ ...menuForm, description: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="Brief description of the menu (optional)"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="menu-category" className="block text-sm font-medium text-gray-700">
+                      Category
+                    </label>
+                    <select
+                      id="menu-category"
+                      value={menuForm.category}
+                      onChange={(e) => setMenuForm({...menuForm, category: e.target.value})}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="general">General</option>
+                      <option value="breakfast">Breakfast</option>
+                      <option value="lunch">Lunch</option>
+                      <option value="dinner">Dinner</option>
+                      <option value="drinks">Drinks</option>
+                    </select>
                   </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Branch
-                      </label>
-                      <select
-                        value={menuForm.branch}
-                        onChange={(e) => setMenuForm({...menuForm, branch: e.target.value})}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      >
-                        <option value="Ateneo">Ateneo</option>
-                        <option value="Lasalle">Lasalle</option>
-                        <option value="PUP">PUP</option>
-                        <option value="UST">UST</option>
-                        <option value="FEU">FEU</option>
-                        <option value="Mapua">Mapua</option>
-                      </select>
-                    </div>
-                  </div>
-                  
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Description (optional)
+                      Branch
                     </label>
-                    <textarea
-                      placeholder="Enter menu description"
-                      value={menuForm.description}
-                      onChange={(e) => setMenuForm({...menuForm, description: e.target.value})}
+                    <select
+                      value={menuForm.branch}
+                      onChange={(e) => setMenuForm({...menuForm, branch: e.target.value})}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      rows="3"
-                    />
+                    >
+                      <option value="Ateneo">Ateneo</option>
+                      <option value="Lasalle">Lasalle</option>
+                      <option value="PUP">PUP</option>
+                      <option value="UST">UST</option>
+                      <option value="FEU">FEU</option>
+                      <option value="Mapua">Mapua</option>
+                    </select>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Images (select multiple for slideshow) *
-                      </label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleImageChange}
-                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 transition-colors"
-                        required
-                      />
-                      {menuForm.images.length > 0 && (
-                        <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
-                          <p className="text-sm text-green-800">
-                            ✓ Selected {menuForm.images.length} image(s)
-                          </p>
-                          <p className="text-xs text-green-600 mt-1">
-                            Images will be displayed in the order selected
-                          </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Images (select multiple for slideshow) *
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImageChange}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 transition-colors"
+                      required={!menuForm._id && menuForm.existingImages.length === 0}
+                    />
+                    {menuForm.images.length > 0 && (
+                      <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+                        <p className="text-sm text-green-800">
+                          ✓ Selected {menuForm.images.length} image(s)
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">
+                          Images will be displayed in the order selected
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Show existing images when editing */}
+                {menuForm.existingImages?.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      Current Images ({menuForm.existingImages.length})
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {menuForm.existingImages.map((img, idx) => (
+                        <div key={idx} className="relative group">
+                          <img 
+                            src={img.imageUrl} 
+                            alt={`Menu ${idx + 1}`} 
+                            className="h-24 w-full object-cover rounded-md"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Remove image from existing images
+                              const updatedImages = [...menuForm.existingImages];
+                              updatedImages.splice(idx, 1);
+                              setMenuForm(prev => ({
+                                ...prev,
+                                existingImages: updatedImages
+                              }));
+                            }}
+                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Remove image"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
                         </div>
-                      )}
+                      ))}
                     </div>
                   </div>
+                )}
 
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowMenuModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Cancel
+                  </button>
                   <button
                     type="submit"
                     disabled={uploading}
-                    className="w-full bg-primary-600 text-white px-4 py-3 rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
                   >
                     {uploading ? (
-                      <div className="flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Uploading...
-                      </div>
-                    ) : (
-                      <>
-                        <Upload className="inline h-4 w-4 mr-2" />
-                        Upload Menu
-                      </>
-                    )}
+                      <span className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        {menuForm._id ? 'Updating...' : 'Uploading...'}
+                      </span>
+                    ) : menuForm._id ? 'Update Menu' : 'Create Menu'}
                   </button>
-                </form>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <TextMenuCreator 
+                  menu={menuForm._id ? menuForm : null} 
+                  onSave={() => {
+                    setShowMenuModal(false);
+                    setSuccessMessage(menuForm._id ? 'Menu updated successfully!' : 'Menu created successfully!');
+                    fetchData();
+                  }}
+                  onCancel={() => setShowMenuModal(false)}
+                />
+              </div>
+            )}
+          </div>
+        </GlassModal>
+
+        {/* Menus Tab */}
+        {activeTab === 'menus' && (
+          <div className="space-y-6">
+            {/* Menu Creation Buttons */}
+            <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+              <div className="flex">
+                <button
+                  onClick={handleNewImageMenu}
+                  className="flex-1 flex items-center justify-center px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-colors shadow-sm max-w-xs"
+                >
+                  <Image className="h-5 w-5 mr-2" />
+                  <span>New Menu</span>
+                </button>
               </div>
             </div>
 
@@ -1060,13 +1243,32 @@ const AdminDashboard = () => {
                                 {menu.menuType === 'custom' ? 'Custom' : 'Image'}
                               </span>
                             </div>
-                            <button
-                              onClick={() => handleDeleteMenu(menu._id, menu.name)}
-                              className="text-red-600 hover:text-red-700 transition-colors"
-                              title="Delete menu"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            <div className="flex space-x-2">
+                              {menu.menuType === 'custom' ? (
+                                <button
+                                  onClick={() => handleEditTextMenu(menu)}
+                                  className="text-blue-600 hover:text-blue-700 transition-colors"
+                                  title="Edit menu"
+                                >
+                                  <Edit3 className="h-4 w-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleEditImageMenu(menu)}
+                                  className="text-blue-600 hover:text-blue-700 transition-colors"
+                                  title="Edit menu"
+                                >
+                                  <Edit3 className="h-4 w-4" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteMenu(menu._id, menu.name)}
+                                className="text-red-600 hover:text-red-700 transition-colors"
+                                title="Delete menu"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
                           {menu.description && (
                             <p className="text-sm text-gray-600 mb-2">{menu.description}</p>

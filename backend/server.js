@@ -670,24 +670,87 @@ app.post('/api/create-custom-menu', authenticateToken, requireAdmin, async (req,
   }
 });
 
-// Update text-based menu
-app.put('/api/menus/:id', authenticateToken, requireAdmin, async (req, res) => {
+// Update menu (text or image)
+app.put('/api/menus/:id', authenticateToken, requireAdmin, (req, res, next) => {
+  uploadBase64Multiple(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
+    console.log('Updating menu with ID:', req.params.id);
+    console.log('Request body:', req.body);
+    console.log('Files:', req.files ? req.files.length : 0);
+    
+    // Get text fields from form data
     const { name, description, category, branch, menuItems, design } = req.body;
+    let existingImages = req.body.existingImages;
+    
+    // Parse existingImages if it's a string
+    if (existingImages && typeof existingImages === 'string') {
+      try {
+        existingImages = JSON.parse(existingImages);
+      } catch (e) {
+        console.error('Error parsing existingImages:', e);
+        return res.status(400).json({ error: 'Invalid existingImages format' });
+      }
+    }
     
     const updateData = {
       name,
       description,
       category,
-      branch
+      branch,
+      updatedAt: new Date()
     };
 
+    // Handle menu type specific updates
     if (menuItems) {
-      updateData.menuItems = menuItems;
+      try {
+        updateData.menuItems = typeof menuItems === 'string' ? JSON.parse(menuItems) : menuItems;
+      } catch (e) {
+        console.error('Error parsing menuItems:', e);
+        return res.status(400).json({ error: 'Invalid menuItems format' });
+      }
     }
 
     if (design) {
-      updateData.design = design;
+      try {
+        updateData.design = typeof design === 'string' ? JSON.parse(design) : design;
+      } catch (e) {
+        console.error('Error parsing design:', e);
+        return res.status(400).json({ error: 'Invalid design format' });
+      }
+    }
+
+    // Handle image updates
+    if (req.files && req.files.length > 0) {
+      console.log(`Processing ${req.files.length} new image(s)`);
+      const newImages = req.files.map((file, index) => ({
+        imageUrl: bufferToBase64(file.buffer, file.mimetype),
+        fileName: file.originalname,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        order: index,
+        createdAt: new Date()
+      }));
+      
+      // Combine existing images (if any) with new ones
+      if (existingImages && existingImages.length > 0) {
+        console.log(`Combining with ${existingImages.length} existing image(s)`);
+        updateData.images = [...existingImages, ...newImages];
+      } else {
+        console.log('No existing images, using only new images');
+        updateData.images = newImages;
+      }
+    } else if (existingImages && existingImages.length > 0) {
+      console.log(`Updating order of ${existingImages.length} existing image(s)`);
+      updateData.images = existingImages;
+    } else {
+      console.log('No images provided in the update');
+      updateData.images = [];
     }
 
     const menu = await Menu.findByIdAndUpdate(
@@ -702,6 +765,7 @@ app.put('/api/menus/:id', authenticateToken, requireAdmin, async (req, res) => {
 
     res.json(menu);
   } catch (error) {
+    console.error('Update menu error:', error);
     res.status(500).json({ error: error.message });
   }
 });

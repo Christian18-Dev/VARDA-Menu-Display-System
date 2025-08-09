@@ -62,7 +62,15 @@ export const getMenus = () => api.get('/menus')
 export const getMenu = (id) => api.get(`/menus/${id}`)
 export const deleteMenu = (id) => api.delete(`/menus/${id}`)
 export const createCustomMenu = (menuData) => api.post('/create-custom-menu', menuData)
-export const updateMenu = (id, menuData) => api.put(`/menus/${id}`, menuData)
+export const updateMenu = (id, formData) => {
+  const token = localStorage.getItem('token');
+  return axios.put(`${API_BASE_URL}/menus/${id}`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+}
 
 // Upload APIs
 export const uploadMenu = (formData) => {
