@@ -80,26 +80,69 @@ const DisplayPage = () => {
 
       // Listen for sync/reset event
       socket.on('display-sync-refresh', (data) => {
-        console.log('Received sync refresh signal, preparing to reload page...')
-        
-        // Ensure delay is a safe number to prevent issues
-        let delay = 1000 // Default 1 second delay
-        if (data && typeof data.delay === 'number' && data.delay > 0 && data.delay <= 30000) {
-          delay = Math.floor(data.delay)
-        } else if (data && data.delay) {
-          const parsed = parseInt(data.delay)
-          if (!isNaN(parsed) && parsed > 0 && parsed <= 30000) {
-            delay = parsed
-          }
+        if (!data || !data.targetTime) {
+          console.error('Invalid sync data received');
+          return;
         }
         
-        console.log('Display will refresh in', delay + 'ms')
+        // Calculate network latency (one-way trip time)
+        const now = Date.now();
+        const serverTime = data.serverTime || now;
+        const networkLatency = Math.max(0, now - serverTime);
         
-        setTimeout(() => {
-          console.log('Syncing display refresh now...')
-          window.location.reload()
-        }, delay)
-      })
+        // Calculate time until target sync time (accounting for network latency)
+        const targetTime = data.targetTime;
+        const timeUntilSync = targetTime - now - networkLatency;
+        
+        console.log('🔁 SYNC: Received sync command', {
+          serverTime: new Date(serverTime).toISOString(),
+          targetTime: new Date(targetTime).toISOString(),
+          networkLatency: `${networkLatency}ms`,
+          timeUntilSync: `${timeUntilSync}ms`,
+          currentTime: new Date(now).toISOString()
+        });
+        
+        // If the target time is in the past, sync immediately
+        if (timeUntilSync <= 0) {
+          console.log('⏱️ SYNC: Target time already passed, syncing immediately');
+          window.location.reload();
+          return;
+        }
+        
+        // Show countdown in the UI (optional)
+        const countdownEl = document.getElementById('sync-countdown');
+        if (countdownEl) {
+          countdownEl.textContent = `Syncing in ${Math.ceil(timeUntilSync / 1000)}s`;
+          countdownEl.style.display = 'block';
+        }
+        
+        // Set up precise timing for the sync
+        const startTime = performance.now();
+        const syncAt = startTime + timeUntilSync;
+        
+        const syncReload = () => {
+          const now = performance.now();
+          const remaining = syncAt - now;
+          
+          // Update countdown (optional)
+          if (countdownEl) {
+            countdownEl.textContent = `Syncing in ${Math.max(0, Math.ceil(remaining / 100) / 10)}s`;
+          }
+          
+          if (remaining <= 0) {
+            console.log('🔄 SYNC: Synchronized reload at', new Date().toISOString());
+            if (countdownEl) countdownEl.style.display = 'none';
+            window.location.reload();
+          } else {
+            // Use requestAnimationFrame for precise timing
+            requestAnimationFrame(syncReload);
+          }
+        };
+        
+        // Start the sync process
+        console.log(`⏱️ SYNC: Will sync in ${Math.ceil(timeUntilSync / 100) / 10} seconds`);
+        requestAnimationFrame(syncReload);
+      });
 
       return () => {
         clearInterval(pingInterval)
@@ -342,204 +385,124 @@ const DisplayPage = () => {
   if (currentMenu?.menuType === 'custom') {
     const design = currentMenu.design || {}
     return (
-      <div 
-        className="min-h-screen relative overflow-hidden"
-        style={{
-          backgroundColor: design.backgroundColor || '#000000',
-          color: design.textColor || '#FFFFFF',
-          fontFamily: design.fontFamily || 'Arial, sans-serif',
-          backgroundImage: design.backgroundImage ? `url(${design.backgroundImage})` : 'none',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }}
-      >
-        {/* Background overlay for better text readability */}
-        {design.backgroundImage && (
-          <div 
-            className="absolute inset-0 bg-black bg-opacity-40"
-            style={{ zIndex: 1 }}
-          ></div>
-        )}
-        
-        <div className="min-h-screen flex flex-col justify-center items-center p-8 relative" style={{ zIndex: 2 }}>
-          {/* Menu Title */}
-          {design.showMenuName !== false && (
-            <h1 
-              className="text-center mb-8 font-bold"
-              style={{
-                color: design.titleColor || '#FFD700',
-                fontSize: design.menuNameFontSize || design.titleFontSize || '3rem'
-              }}
-            >
-              {currentMenu.name}
-            </h1>
+      <div className="min-h-screen relative overflow-hidden">
+        <div 
+          className="min-h-screen relative overflow-hidden"
+          style={{
+            backgroundColor: design.backgroundColor || '#000000',
+            color: design.textColor || '#FFFFFF',
+            fontFamily: design.fontFamily || 'Arial, sans-serif',
+            backgroundImage: design.backgroundImage ? `url(${design.backgroundImage})` : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }}
+        >
+          {/* Background overlay for better text readability */}
+          {design.backgroundImage && (
+            <div 
+              className="absolute inset-0 bg-black bg-opacity-40"
+              style={{ zIndex: 1 }}
+            />
           )}
           
-          {/* Menu Description */}
-          {currentMenu.description && (
-            <p 
-              className="text-center mb-12 opacity-80"
-              style={{ fontSize: design.itemFontSize || '1.5rem' }}
-            >
-              {currentMenu.description}
-            </p>
-          )}
+          <div className="min-h-screen flex flex-col justify-center items-center p-8 relative" style={{ zIndex: 2 }}>
+            {/* Menu Title */}
+            {design.showMenuName !== false && (
+              <h1 
+                className="text-center mb-8 font-bold"
+                style={{
+                  color: design.titleColor || '#FFD700',
+                  fontSize: design.menuNameFontSize || design.titleFontSize || '3rem'
+                }}
+              >
+                {currentMenu.name}
+              </h1>
+            )}
+            
+            {/* Menu Description */}
+            {currentMenu.description && (
+              <p 
+                className="text-center mb-12 opacity-80"
+                style={{ fontSize: design.itemFontSize || '1.5rem' }}
+              >
+                {currentMenu.description}
+              </p>
+            )}
 
-          {/* Menu Items */}
-          {currentMenu.menuItems && currentMenu.menuItems.length > 0 && (
-            <div className="w-full max-w-4xl space-y-6">
-              {currentMenu.menuItems.map((item, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-6">
-                    {item.imageUrl && (
-                      <img
-                        src={item.imageUrl}
-                        alt={item.name}
-                        className="h-24 w-24 object-cover rounded-lg shadow-lg"
-                      />
-                    )}
-                    <div>
-                      <h3 
-                        className="font-semibold"
-                        style={{ fontSize: design.itemFontSize || '1.5rem' }}
-                      >
-                        {item.name}
-                      </h3>
-                      {item.description && (
-                        <p className="opacity-80 mt-1">{item.description}</p>
+            {/* Menu Items */}
+            {currentMenu.menuItems && currentMenu.menuItems.length > 0 && (
+              <div className="w-full max-w-4xl space-y-6">
+                {currentMenu.menuItems.map((item, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center space-x-6">
+                      {item.imageUrl && (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="h-24 w-24 object-cover rounded-lg shadow-lg"
+                        />
                       )}
+                      <div>
+                        <h3 
+                          className="font-semibold"
+                          style={{ fontSize: design.itemFontSize || '1.5rem' }}
+                        >
+                          {item.name}
+                        </h3>
+                        {item.description && (
+                          <p className="opacity-80 mt-1">{item.description}</p>
+                        )}
+                      </div>
                     </div>
+                    {item.price && (
+                      <span 
+                        className="font-bold"
+                        style={{
+                          color: design.priceColor || '#FF6B6B',
+                          fontSize: design.priceFontSize || '1.2rem'
+                        }}
+                      >
+                        {item.price}
+                      </span>
+                    )}
                   </div>
-                  {item.price && (
-                    <span 
-                      className="font-bold"
-                      style={{
-                        color: design.priceColor || '#FF6B6B',
-                        fontSize: design.priceFontSize || '1.2rem'
-                      }}
-                    >
-                      {item.price}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     )
   }
 
-  // Render image-based menu (existing functionality)
+  // Render image-based menu
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh' }}>
-      {/* Fullscreen Image Display */}
-      <div className="min-h-screen flex items-center justify-center" style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh' }}>
-        {currentImage ? (
-          transitionType === 'scrolling' && isScrolling ? (
-            // Scrolling animation mode with seamless loop using CSS animation
-            <div 
-              className="relative w-full h-full"
-              style={{
-                animation: animationStarted ? `scrollAnimation ${slideshowInterval / 1000}s linear infinite` : 'none',
-                transform: animationStarted ? 'none' : 'translateY(0vh)', // Start with first image visible
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100vw',
-                height: '100vh'
-              }}
-            >
-              {/* Create seamless loop by duplicating images */}
-              {(() => {
-                const images = currentMenu.images
-                if (!images || images.length === 0) return null
-                
-                // Create array with images duplicated for seamless loop
-                // Start with original images, then repeat them
-                const seamlessImages = [
-                  ...images, // Original images
-                  ...images  // Duplicated images for seamless loop
-                ]
-                
-                return seamlessImages.map((image, index) => (
-                  <img
-                    key={`${currentMenu._id}-${index}`}
-                    src={image.imageUrl}
-                    alt={`Menu Display ${index + 1}`}
-                    className="w-full h-screen object-cover absolute"
-                    style={{
-                      top: `${index * 100}vh`,
-                      left: 0,
-                      width: '100vw',
-                      height: '100vh',
-                      objectFit: 'cover'
-                    }}
-                  />
-                ))
-              })()}
-            </div>
-          ) : transitionType === 'push' && isPushing ? (
-            // Push animation mode
-            <div className="relative w-full h-full">
-              {/* Current image sliding up */}
-              <img
-                src={currentImage.imageUrl}
-                alt="Menu Display"
-                className="w-full h-screen object-cover absolute"
-                style={{
-                  top: 0,
-                  left: 0,
-                  width: '100vw',
-                  height: '100vh',
-                  objectFit: 'cover',
-                  animation: 'pushUpAnimation 0.5s ease-in-out forwards',
-                  zIndex: 1
-                }}
-              />
-              
-              {/* Next image sliding in from bottom */}
-              {(() => {
-                const nextMenu = currentMenus[nextMenuIndex]
-                const nextImage = nextMenu?.images?.[nextImageIndex]
-                if (!nextImage) return null
-                
-                return (
-                  <img
-                    src={nextImage.imageUrl}
-                    alt="Next Menu Display"
-                    className="w-full h-screen object-cover absolute"
-                    style={{
-                      top: 0,
-                      left: 0,
-                      width: '100vw',
-                      height: '100vh',
-                      objectFit: 'cover',
-                      animation: 'pushDownAnimation 0.5s ease-in-out forwards',
-                      zIndex: 2
-                    }}
-                  />
-                )
-              })()}
-            </div>
-          ) : (
-            // Normal slideshow mode
-            <img
-              src={currentImage.imageUrl}
-              alt="Menu Display"
-              className="w-full h-full object-cover absolute inset-0"
-              style={{
-                width: '100vw',
-                height: '100vh',
-                objectFit: 'cover'
-              }}
-            />
-          )
-        ) : (
-          <div className="text-center text-white">
+    <div className="min-h-screen bg-black relative overflow-hidden">
+      {/* Sync Countdown Overlay */}
+      <div 
+        id="sync-countdown" 
+        style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          color: 'white',
+          padding: '10px 15px',
+          borderRadius: '5px',
+          zIndex: 1000,
+          display: 'none',
+          fontSize: '16px',
+          fontWeight: 'bold',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.5)'
+        }}
+      />
+
+      {!currentImage ? (
+        <div className="min-h-screen flex items-center justify-center text-center text-white">
+          <div>
             <div className="text-6xl mb-4">📋</div>
-            <h1 className="text-4xl font-bold mb-2">No Menu Assigned.</h1>
+            <h1 className="text-4xl font-bold mb-2">No Menu Assigned</h1>
             <p className="text-xl text-gray-300">
               Please assign menus from the admin dashboard
             </p>
@@ -552,8 +515,90 @@ const DisplayPage = () => {
               </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="relative w-full h-screen">
+          {(() => {
+            // Scrolling Animation
+            if (transitionType === 'scrolling' && isScrolling) {
+              return (
+                <div 
+                  className="relative w-full h-full"
+                  style={{
+                    animation: animationStarted ? `scrollAnimation ${slideshowInterval / 1000}s linear infinite` : 'none',
+                    transform: animationStarted ? 'none' : 'translateY(0vh)',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0
+                  }}
+                >
+                  {currentMenu?.images?.map((image, index) => (
+                    <img
+                      key={`${currentMenu._id}-${index}`}
+                      src={image.imageUrl}
+                      alt={`Menu Display ${index + 1}`}
+                      className="w-full h-screen object-cover absolute"
+                      style={{
+                        top: `${index * 100}%`,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover'
+                      }}
+                    />
+                  ))}
+                </div>
+              )
+            }
+            
+            // Push Animation
+            if (transitionType === 'push' && isPushing) {
+              const nextMenu = currentMenus[nextMenuIndex]
+              const nextImage = nextMenu?.images?.[nextImageIndex]
+              
+              return (
+                <div className="relative w-full h-full">
+                  <img
+                    src={currentImage.imageUrl}
+                    alt="Menu Display"
+                    className="w-full h-full object-cover absolute"
+                    style={{
+                      animation: 'pushUpAnimation 0.5s ease-in-out forwards',
+                      zIndex: 1
+                    }}
+                  />
+                  
+                  {nextImage && (
+                    <img
+                      src={nextImage.imageUrl}
+                      alt="Next Menu Display"
+                      className="w-full h-full object-cover absolute top-0 left-0"
+                      style={{
+                        animation: 'pushDownAnimation 0.5s ease-in-out forwards',
+                        zIndex: 2
+                      }}
+                    />
+                  )}
+                </div>
+              )
+            }
+            
+            // Default static image
+            return (
+              <img
+                src={currentImage.imageUrl}
+                alt="Menu Display"
+                className="w-full h-full object-cover"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover'
+                }}
+              />
+            )
+          })()}
+        </div>
+      )}
     </div>
   )
 }

@@ -412,7 +412,7 @@ io.on('connection', (socket) => {
     
     try {
       // Ensure delay is a safe primitive number to prevent serialization issues
-      let delay = 1000; // Default delay
+      let delay = 5000; // Default 5 second delay to allow all clients to sync
       if (data && typeof data.delay === 'number' && data.delay > 0 && data.delay <= 30000) {
         delay = Math.floor(data.delay); // Ensure it's an integer
       } else if (data && data.delay) {
@@ -422,21 +422,30 @@ io.on('connection', (socket) => {
         }
       }
       
-      console.log('⏱️ SERVER: Sync delay set to:', delay + 'ms');
+      const serverTime = Date.now();
+      const targetTime = serverTime + delay;
       
-      // Create a clean payload object to prevent circular references
-      const syncPayload = { delay: delay };
+      console.log(`⏱️ SERVER: Sync scheduled for ${new Date(targetTime).toISOString()} (in ${delay}ms)`);
       
-      // Broadcast sync event to all connected displays with delay
+      // Create sync payload with timing information
+      const syncPayload = {
+        serverTime: serverTime,
+        targetTime: targetTime,
+        delay: delay
+      };
+      
+      // Broadcast sync event to all connected displays
       console.log('📡 SERVER: Broadcasting display-sync-refresh to all clients...');
       io.emit('display-sync-refresh', syncPayload);
       
       // Send success response with clean data
       socket.emit('sync-success', { 
-        message: `All displays will sync in ${delay/1000} second(s)...` 
+        message: `All displays will sync at ${new Date(targetTime).toLocaleTimeString()}`,
+        targetTime: targetTime
       });
-      console.log('✅ SERVER: Sync broadcast completed successfully');
-      logSocketEvent('sync-all-displays', socket.id, `SUCCESS - Broadcasted sync to ${connectedClients.size} clients with ${delay}ms delay`);
+      
+      console.log(`✅ SERVER: Sync scheduled for ${new Date(targetTime).toLocaleTimeString()}`);
+      logSocketEvent('sync-all-displays', socket.id, `SYNC SCHEDULED - Target: ${new Date(targetTime).toISOString()} | Clients: ${connectedClients.size}`);
     } catch (error) {
       console.error('❌ SERVER: Sync all displays error:', error);
       socket.emit('sync-error', { message: 'Sync failed' });
