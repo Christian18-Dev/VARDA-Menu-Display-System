@@ -17,11 +17,9 @@ const DisplayPage = () => {
   const [currentMenuIndex, setCurrentMenuIndex] = useState(0)
   const [slideshowInterval, setSlideshowInterval] = useState(5000)
   const [transitionType, setTransitionType] = useState('normal')
+  const [isPaused, setIsPaused] = useState(false)
   
-  // Scrolling animation state
-  const [scrollPosition, setScrollPosition] = useState(0)
-  const [isScrolling, setIsScrolling] = useState(false)
-  const [animationStarted, setAnimationStarted] = useState(false)
+
   
   // Push animation state
   const [isPushing, setIsPushing] = useState(false)
@@ -78,7 +76,7 @@ const DisplayPage = () => {
         }
       })
 
-      // Listen for sync/reset event
+      // Listen for sync/reset event (legacy)
       socket.on('display-sync-refresh', (data) => {
         if (!data || !data.targetTime) {
           console.error('Invalid sync data received');
@@ -144,11 +142,56 @@ const DisplayPage = () => {
         requestAnimationFrame(syncReload);
       });
 
+      // Pause all displays
+      socket.on('display-pause', () => {
+        setIsPaused(true)
+      })
+
+      // Resume all displays at synchronized target time
+      socket.on('display-resume', (data) => {
+        const now = Date.now()
+        const serverTime = data?.serverTime || now
+        const targetTime = data?.targetTime || now
+        const latency = Math.max(0, now - serverTime)
+        const timeUntil = Math.max(0, targetTime - now - latency)
+
+        // Optional: show countdown
+        const countdownEl = document.getElementById('sync-countdown')
+        if (countdownEl) {
+          countdownEl.style.display = 'block'
+          countdownEl.textContent = `Resuming in ${Math.ceil(timeUntil/1000)}s`
+        }
+
+        const start = performance.now()
+        const resumeAt = start + timeUntil
+        const tick = () => {
+          const remaining = resumeAt - performance.now()
+          if (countdownEl) {
+            countdownEl.textContent = `Resuming in ${Math.max(0, Math.ceil(remaining/100)/10)}s`
+          }
+          if (remaining <= 0) {
+            // Reset indices so everyone starts aligned
+            setCurrentImageIndex(0)
+            setCurrentMenuIndex(0)
+            setIsPushing(false)
+            setNextImageIndex(0)
+            setNextMenuIndex(0)
+            setIsPaused(false)
+            if (countdownEl) countdownEl.style.display = 'none'
+          } else {
+            requestAnimationFrame(tick)
+          }
+        }
+        requestAnimationFrame(tick)
+      })
+
       return () => {
         clearInterval(pingInterval)
         socket.off('display-registered')
         socket.off('menus-updated')
         socket.off('display-sync-refresh')
+        socket.off('display-pause')
+        socket.off('display-resume')
       }
     }
   }, [socket, displayId])
@@ -178,7 +221,7 @@ const DisplayPage = () => {
 
   // Slideshow effect
   useEffect(() => {
-    if (currentMenus.length === 0 || transitionType === 'scrolling') return
+    if (isPaused || currentMenus.length === 0) return
 
     const interval = setInterval(() => {
       const currentMenu = currentMenus[currentMenuIndex]
@@ -247,82 +290,18 @@ const DisplayPage = () => {
     }, slideshowInterval)
 
     return () => clearInterval(interval)
-  }, [currentMenus, currentMenuIndex, currentImageIndex, slideshowInterval, transitionType])
+  }, [currentMenus, currentMenuIndex, currentImageIndex, slideshowInterval, transitionType, isPaused])
 
   // Reset indices when menus change
   useEffect(() => {
     setCurrentImageIndex(0)
     setCurrentMenuIndex(0)
-    setScrollPosition(0)
     setIsPushing(false)
     setNextImageIndex(0)
     setNextMenuIndex(0)
   }, [currentMenus])
 
-  // Scrolling animation effect
-  useEffect(() => {
-    if (transitionType !== 'scrolling' || currentMenus.length === 0) {
-      setIsScrolling(false)
-      setAnimationStarted(false)
-      return
-    }
 
-    const currentMenu = currentMenus[currentMenuIndex]
-    if (!currentMenu || currentMenu.menuType === 'custom' || !currentMenu.images) {
-      setIsScrolling(false)
-      setAnimationStarted(false)
-      return
-    }
-
-    setIsScrolling(true)
-    
-    // Delay animation start to ensure first image is fully visible
-    const startTimer = setTimeout(() => {
-      setAnimationStarted(true)
-    }, 1000) // 1 second delay to show first image
-
-    return () => {
-      clearTimeout(startTimer)
-      setIsScrolling(false)
-      setAnimationStarted(false)
-    }
-  }, [transitionType, currentMenus, currentMenuIndex])
-
-  // Initialize scroll position to start with first image visible (no black gap)
-  useEffect(() => {
-    if (transitionType === 'scrolling' && currentMenus.length > 0) {
-      const currentMenu = currentMenus[currentMenuIndex]
-      if (currentMenu && currentMenu.images && currentMenu.images.length > 0) {
-        // Start at the height of one image so the first image is immediately visible
-        setScrollPosition(window.innerHeight)
-      }
-    }
-  }, [transitionType, currentMenus, currentMenuIndex])
-
-  // Add CSS animation for seamless scrolling
-  useEffect(() => {
-    if (transitionType === 'scrolling') {
-      const style = document.createElement('style')
-      const imageCount = currentMenus[currentMenuIndex]?.images?.length || 1
-      const totalHeight = imageCount * 100
-      
-      style.textContent = `
-        @keyframes scrollAnimation {
-          0% {
-            transform: translateY(0vh);
-          }
-          100% {
-            transform: translateY(-${totalHeight}vh);
-          }
-        }
-      `
-      document.head.appendChild(style)
-      
-      return () => {
-        document.head.removeChild(style)
-      }
-    }
-  }, [transitionType, currentMenus, currentMenuIndex])
 
   // Add CSS animation for push effect
   useEffect(() => {
@@ -519,38 +498,6 @@ const DisplayPage = () => {
       ) : (
         <div className="relative w-full h-screen">
           {(() => {
-            // Scrolling Animation
-            if (transitionType === 'scrolling' && isScrolling) {
-              return (
-                <div 
-                  className="relative w-full h-full"
-                  style={{
-                    animation: animationStarted ? `scrollAnimation ${slideshowInterval / 1000}s linear infinite` : 'none',
-                    transform: animationStarted ? 'none' : 'translateY(0vh)',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0
-                  }}
-                >
-                  {currentMenu?.images?.map((image, index) => (
-                    <img
-                      key={`${currentMenu._id}-${index}`}
-                      src={image.imageUrl}
-                      alt={`Menu Display ${index + 1}`}
-                      className="w-full h-screen object-cover absolute"
-                      style={{
-                        top: `${index * 100}%`,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover'
-                      }}
-                    />
-                  ))}
-                </div>
-              )
-            }
-            
             // Push Animation
             if (transitionType === 'push' && isPushing) {
               const nextMenu = currentMenus[nextMenuIndex]

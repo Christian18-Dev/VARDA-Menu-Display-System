@@ -405,53 +405,43 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle sync/reset all displays
-  socket.on('sync-all-displays', (data) => {
-    console.log('🔄 SERVER: Received sync-all-displays request from admin');
-    console.log('📊 SERVER: Current connected clients:', connectedClients.size);
-    
+  // Handle pause all displays
+  socket.on('pause-displays', () => {
     try {
-      // Ensure delay is a safe primitive number to prevent serialization issues
-      let delay = 5000; // Default 5 second delay to allow all clients to sync
-      if (data && typeof data.delay === 'number' && data.delay > 0 && data.delay <= 30000) {
-        delay = Math.floor(data.delay); // Ensure it's an integer
-      } else if (data && data.delay) {
-        const parsed = parseInt(data.delay);
-        if (!isNaN(parsed) && parsed > 0 && parsed <= 30000) {
-          delay = parsed;
-        }
-      }
+      // Broadcast pause command to all connected displays
+      io.emit('display-pause');
+      logSocketEvent('pause-displays', socket.id, `BROADCAST - Paused all displays | Total clients: ${connectedClients.size}`);
+      socket.emit('pause-success', { message: 'All displays paused successfully' });
+    } catch (error) {
+      console.error('Pause displays error:', error);
+      socket.emit('pause-error', { message: 'Failed to pause displays' });
+      logSocketEvent('pause-displays', socket.id, `ERROR - ${error.message}`);
+    }
+  });
+
+  // Handle resume all displays
+  socket.on('resume-displays', (data) => {
+    try {
+      const { delay = 2000 } = data || {};
+      const now = Date.now();
+      const targetTime = now + delay;
       
-      const serverTime = Date.now();
-      const targetTime = serverTime + delay;
-      
-      console.log(`⏱️ SERVER: Sync scheduled for ${new Date(targetTime).toISOString()} (in ${delay}ms)`);
-      
-      // Create sync payload with timing information
-      const syncPayload = {
-        serverTime: serverTime,
-        targetTime: targetTime,
-        delay: delay
-      };
-      
-      // Broadcast sync event to all connected displays
-      console.log('📡 SERVER: Broadcasting display-sync-refresh to all clients...');
-      io.emit('display-sync-refresh', syncPayload);
-      
-      // Send success response with clean data
-      socket.emit('sync-success', { 
-        message: `All displays will sync at ${new Date(targetTime).toLocaleTimeString()}`,
+      // Broadcast resume command to all connected displays with synchronized timing
+      io.emit('display-resume', {
+        serverTime: now,
         targetTime: targetTime
       });
       
-      console.log(`✅ SERVER: Sync scheduled for ${new Date(targetTime).toLocaleTimeString()}`);
-      logSocketEvent('sync-all-displays', socket.id, `SYNC SCHEDULED - Target: ${new Date(targetTime).toISOString()} | Clients: ${connectedClients.size}`);
+      logSocketEvent('resume-displays', socket.id, `BROADCAST - Resume all displays in ${delay}ms | Target time: ${new Date(targetTime).toISOString()} | Total clients: ${connectedClients.size}`);
+      socket.emit('resume-success', { message: `All displays will resume in ${Math.ceil(delay/1000)}s` });
     } catch (error) {
-      console.error('❌ SERVER: Sync all displays error:', error);
-      socket.emit('sync-error', { message: 'Sync failed' });
-      logSocketEvent('sync-all-displays', socket.id, `ERROR - ${error.message}`);
+      console.error('Resume displays error:', error);
+      socket.emit('resume-error', { message: 'Failed to resume displays' });
+      logSocketEvent('resume-displays', socket.id, `ERROR - ${error.message}`);
     }
   });
+
+  
 
   socket.on('disconnect', async () => {
     const clientInfo = connectedClients.get(socket.id);
