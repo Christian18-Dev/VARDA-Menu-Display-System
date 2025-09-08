@@ -31,7 +31,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Only handle 401 for non-login requests
+    if (error.response?.status === 401 && !error.config.url.includes('/auth/login')) {
       // Clear invalid token and redirect to login
       localStorage.removeItem('token');
       localStorage.removeItem('user');
