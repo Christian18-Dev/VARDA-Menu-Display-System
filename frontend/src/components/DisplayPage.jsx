@@ -268,7 +268,7 @@ const DisplayPage = () => {
           setCurrentImageIndex(nextImgIdx)
           setCurrentMenuIndex(nextMenuIdx)
           setIsPushing(false)
-        }, 500) // Animation duration
+        }, 2000) // Animation duration
       } else {
         // Normal slideshow mode
         setCurrentImageIndex(prevIndex => {
@@ -510,7 +510,7 @@ const DisplayPage = () => {
                     alt="Menu Display"
                     className="w-full h-full object-cover absolute"
                     style={{
-                      animation: 'pushUpAnimation 0.5s ease-in-out forwards',
+                      animation: 'pushUpAnimation 2s ease-in-out forwards',
                       zIndex: 1
                     }}
                   />
@@ -521,7 +521,7 @@ const DisplayPage = () => {
                       alt="Next Menu Display"
                       className="w-full h-full object-cover absolute top-0 left-0"
                       style={{
-                        animation: 'pushDownAnimation 0.5s ease-in-out forwards',
+                        animation: 'pushDownAnimation 2s ease-in-out forwards',
                         zIndex: 2
                       }}
                     />
