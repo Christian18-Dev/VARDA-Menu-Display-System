@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 
+const positionSchema = new mongoose.Schema({
+  left: { type: Number, default: 0 },
+  top: { type: Number, default: 0 }
+}, { _id: false })
+
 const menuItemSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -32,6 +37,12 @@ const menuItemSchema = new mongoose.Schema({
   order: {
     type: Number,
     default: 0
+  },
+  layout: {
+    namePos: { type: positionSchema, default: undefined },
+    descPos: { type: positionSchema, default: undefined },
+    pricePos: { type: positionSchema, default: undefined },
+    imagePos: { type: positionSchema, default: undefined }
   }
 });
 
@@ -117,7 +128,9 @@ const menuSchema = new mongoose.Schema({
     backgroundImage: {
       type: String,
       default: ''
-    }
+    },
+    titlePos: { type: positionSchema, default: undefined },
+    menuDescriptionPos: { type: positionSchema, default: undefined }
   },
   isActive: {
     type: Boolean,

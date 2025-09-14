@@ -484,16 +484,11 @@ const AdminDashboard = () => {
   }
 
   const handleEditTextMenu = (menu) => {
-    setMenuForm({
-      name: menu.name,
-      description: menu.description || '',
-      category: menu.category || 'general',
-      branch: menu.branch || 'Ateneo',
-      _id: menu._id, // Store the menu ID for updating
-      menuType: 'custom',
-      menuItems: menu.menuItems || []
-    });
-    setShowMenuModal(true);
+    // Open new TextMenuCreator UI instead of legacy modal
+    setActiveTab('custom-menus')
+    setEditingMenu(menu)
+    setShowTextMenuCreator(true)
+    setShowMenuModal(false)
   };
 
   const handleNewImageMenu = () => {
@@ -511,16 +506,11 @@ const AdminDashboard = () => {
   };
 
   const handleNewTextMenu = () => {
-    setMenuForm({
-      name: '',
-      description: '',
-      category: 'general',
-      branch: 'Ateneo',
-      _id: null,
-      menuType: 'custom',
-      menuItems: []
-    });
-    setShowMenuModal(true);
+    // Open new TextMenuCreator UI for creating a custom menu
+    setActiveTab('custom-menus')
+    setEditingMenu(null)
+    setShowTextMenuCreator(true)
+    setShowMenuModal(false)
   };
 
   const handleCreateTextMenu = () => {

@@ -363,6 +363,46 @@ const DisplayPage = () => {
   // Render custom-based menu
   if (currentMenu?.menuType === 'custom') {
     const design = currentMenu.design || {}
+
+    const getDefaultPosForKey = (key) => {
+      if (key === 'title') return { left: 5, top: 5 }
+      if (key === 'menuDescription') return { left: 5, top: 15 }
+      const match = key.match(/^item-(\d+)-(name|price|desc|image)$/)
+      if (match) {
+        const index = Number(match[1])
+        const field = match[2]
+        const baseTop = 25 + index * 12
+        if (field === 'image') return { left: 5, top: baseTop }
+        if (field === 'name') return { left: 15, top: baseTop }
+        if (field === 'desc') return { left: 15, top: baseTop + 5 }
+        if (field === 'price') return { left: 80, top: baseTop }
+      }
+      return { left: 5, top: 5 }
+    }
+
+    const getPosForKey = (key) => {
+      if (key === 'title') return design.titlePos || getDefaultPosForKey(key)
+      if (key === 'menuDescription') return design.menuDescriptionPos || getDefaultPosForKey(key)
+      const match = key.match(/^item-(\d+)-(name|price|desc|image)$/)
+      if (match) {
+        const index = Number(match[1])
+        const field = match[2]
+        const layout = currentMenu.menuItems?.[index]?.layout || {}
+        if (field === 'image') return layout.imagePos || getDefaultPosForKey(key)
+        if (field === 'name') return layout.namePos || getDefaultPosForKey(key)
+        if (field === 'desc') return layout.descPos || getDefaultPosForKey(key)
+        if (field === 'price') return layout.pricePos || getDefaultPosForKey(key)
+      }
+      return getDefaultPosForKey(key)
+    }
+
+    const hasAnyPositions = () => {
+      if (design.titlePos || design.menuDescriptionPos) return true
+      return (currentMenu.menuItems || []).some(mi => mi.layout && (mi.layout.namePos || mi.layout.descPos || mi.layout.pricePos || mi.layout.imagePos))
+    }
+
+    const useFreeLayout = hasAnyPositions()
+
     return (
       <div className="min-h-screen relative overflow-hidden">
         <div 
@@ -377,79 +417,68 @@ const DisplayPage = () => {
             backgroundRepeat: 'no-repeat'
           }}
         >
-          {/* Background overlay for better text readability */}
-          {design.backgroundImage && (
-            <div 
-              className="absolute inset-0 bg-black bg-opacity-40"
-              style={{ zIndex: 1 }}
-            />
-          )}
-          
-          <div className="min-h-screen flex flex-col justify-center items-center p-8 relative" style={{ zIndex: 2 }}>
-            {/* Menu Title */}
-            {design.showMenuName !== false && (
-              <h1 
-                className="text-center mb-8 font-bold"
-                style={{
-                  color: design.titleColor || '#FFD700',
-                  fontSize: design.menuNameFontSize || design.titleFontSize || '3rem'
-                }}
-              >
-                {currentMenu.name}
-              </h1>
-            )}
-            
-            {/* Menu Description */}
-            {currentMenu.description && (
-              <p 
-                className="text-center mb-12 opacity-80"
-                style={{ fontSize: design.itemFontSize || '1.5rem' }}
-              >
-                {currentMenu.description}
-              </p>
-            )}
-
-            {/* Menu Items */}
-            {currentMenu.menuItems && currentMenu.menuItems.length > 0 && (
-              <div className="w-full max-w-4xl space-y-6">
-                {currentMenu.menuItems.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center space-x-6">
-                      {item.imageUrl && (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.name}
-                          className="h-24 w-24 object-cover rounded-lg shadow-lg"
-                        />
-                      )}
-                      <div>
-                        <h3 
-                          className="font-semibold"
-                          style={{ fontSize: design.itemFontSize || '1.5rem' }}
-                        >
-                          {item.name}
-                        </h3>
-                        {item.description && (
-                          <p className="opacity-80 mt-1">{item.description}</p>
-                        )}
-                      </div>
+          {/* Background overlay removed for cleaner display */}
+          {useFreeLayout ? (
+            <div className="min-h-screen relative" style={{ zIndex: 2 }}>
+              {design.showMenuName !== false && (
+                <div style={{ position: 'absolute', left: `${getPosForKey('title').left}%`, top: `${getPosForKey('title').top}%` }}>
+                  <h1 className="font-bold" style={{ color: design.titleColor || '#FFD700', fontSize: design.menuNameFontSize || design.titleFontSize || '3rem', textAlign: 'center' }}>{currentMenu.name}</h1>
+                </div>
+              )}
+              {currentMenu.description && (
+                <div style={{ position: 'absolute', left: `${getPosForKey('menuDescription').left}%`, top: `${getPosForKey('menuDescription').top}%` }}>
+                  <p className="opacity-80" style={{ fontSize: design.itemFontSize || '1.5rem' }}>{currentMenu.description}</p>
+                </div>
+              )}
+              {(currentMenu.menuItems || []).map((item, index) => (
+                <div key={index}>
+                  {item.imageUrl && (
+                    <div style={{ position: 'absolute', left: `${getPosForKey(`item-${index}-image`).left}%`, top: `${getPosForKey(`item-${index}-image`).top}%` }}>
+                      <img src={item.imageUrl} alt={item.name} className="h-24 w-24 object-cover rounded-lg shadow-lg" />
                     </div>
-                    {item.price && (
-                      <span 
-                        className="font-bold"
-                        style={{
-                          color: design.priceColor || '#FF6B6B',
-                          fontSize: design.priceFontSize || '1.2rem'
-                        }}
-                      >
-                        {item.price}
-                      </span>
-                    )}
+                  )}
+                  <div style={{ position: 'absolute', left: `${getPosForKey(`item-${index}-name`).left}%`, top: `${getPosForKey(`item-${index}-name`).top}%` }}>
+                    <h3 className="font-semibold" style={{ fontSize: design.itemFontSize || '1.5rem' }}>{item.name}</h3>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  {item.description && (
+                    <div style={{ position: 'absolute', left: `${getPosForKey(`item-${index}-desc`).left}%`, top: `${getPosForKey(`item-${index}-desc`).top}%` }}>
+                      <p className="opacity-80">{item.description}</p>
+                    </div>
+                  )}
+                  {item.price && (
+                    <div style={{ position: 'absolute', left: `${getPosForKey(`item-${index}-price`).left}%`, top: `${getPosForKey(`item-${index}-price`).top}%` }}>
+                      <span className="font-bold" style={{ color: design.priceColor || '#FF6B6B', fontSize: design.priceFontSize || '1.2rem' }}>{item.price}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="min-h-screen flex flex-col justify-center items-center p-8 relative" style={{ zIndex: 2 }}>
+              {design.showMenuName !== false && (
+                <h1 className="text-center mb-8 font-bold" style={{ color: design.titleColor || '#FFD700', fontSize: design.menuNameFontSize || design.titleFontSize || '3rem' }}>{currentMenu.name}</h1>
+              )}
+              {currentMenu.description && (
+                <p className="text-center mb-12 opacity-80" style={{ fontSize: design.itemFontSize || '1.5rem' }}>{currentMenu.description}</p>
+              )}
+              {(currentMenu.menuItems || []).length > 0 && (
+                <div className="w-full max-w-4xl space-y-6">
+                  {currentMenu.menuItems.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="flex items-center space-x-6">
+                        {item.imageUrl && (<img src={item.imageUrl} alt={item.name} className="h-24 w-24 object-cover rounded-lg shadow-lg" />)}
+                        <div>
+                          <h3 className="font-semibold" style={{ fontSize: design.itemFontSize || '1.5rem' }}>{item.name}</h3>
+                          {item.description && <p className="opacity-80 mt-1">{item.description}</p>}
+                        </div>
+                      </div>
+                      {item.price && (<span className="font-bold" style={{ color: design.priceColor || '#FF6B6B', fontSize: design.priceFontSize || '1.2rem' }}>{item.price}</span>)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     )

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { 
   Plus, 
   Trash2, 
@@ -7,7 +7,10 @@ import {
   Type, 
   Save,
   Edit3,
-  Image as ImageIcon
+  Image as ImageIcon,
+  X,
+  Settings,
+  Eye
 } from 'lucide-react'
 import { createCustomMenu, updateMenu, uploadItemImage } from '../services/api'
 
@@ -37,6 +40,90 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
   const [uploadingImage, setUploadingImage] = useState(null)
   const [uploadingBackground, setUploadingBackground] = useState(false)
   const [showDesignPanel, setShowDesignPanel] = useState(false)
+  const [showFullScreenDesign, setShowFullScreenDesign] = useState(false)
+  const [showDesignSettings, setShowDesignSettings] = useState(false)
+  const [isDragMode, setIsDragMode] = useState(false)
+  const previewRef = useRef(null)
+  const [draggingKey, setDraggingKey] = useState(null)
+
+  const getPreviewRect = () => {
+    const el = previewRef.current
+    if (!el) return null
+    return el.getBoundingClientRect()
+  }
+
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
+
+  const getDefaultPosForKey = (key) => {
+    // Defaults in percentages to form a readable layout
+    if (key === 'title') return { left: 5, top: 5 }
+    if (key === 'menuDescription') return { left: 5, top: 15 }
+    // item-<index>-<field>
+    const match = key.match(/^item-(\d+)-(name|price|desc|image)$/)
+    if (match) {
+      const index = Number(match[1])
+      const field = match[2]
+      const baseTop = 25 + index * 12
+      if (field === 'image') return { left: 5, top: baseTop }
+      if (field === 'name') return { left: 15, top: baseTop }
+      if (field === 'desc') return { left: 15, top: baseTop + 5 }
+      if (field === 'price') return { left: 80, top: baseTop }
+    }
+    return { left: 5, top: 5 }
+  }
+
+  const getPosForKey = (key) => {
+    if (key === 'title') return formData.design.titlePos || getDefaultPosForKey(key)
+    if (key === 'menuDescription') return formData.design.menuDescriptionPos || getDefaultPosForKey(key)
+    const match = key.match(/^item-(\d+)-(name|price|desc|image)$/)
+    if (match) {
+      const index = Number(match[1])
+      const field = match[2]
+      const layout = formData.menuItems[index]?.layout || {}
+      if (field === 'image') return layout.imagePos || getDefaultPosForKey(key)
+      if (field === 'name') return layout.namePos || getDefaultPosForKey(key)
+      if (field === 'desc') return layout.descPos || getDefaultPosForKey(key)
+      if (field === 'price') return layout.pricePos || getDefaultPosForKey(key)
+    }
+    return getDefaultPosForKey(key)
+  }
+
+  const setPosForKey = (key, pos) => {
+    if (key === 'title') {
+      handleDesignChange('titlePos', pos)
+      return
+    }
+    if (key === 'menuDescription') {
+      handleDesignChange('menuDescriptionPos', pos)
+      return
+    }
+    const match = key.match(/^item-(\d+)-(name|price|desc|image)$/)
+    if (match) {
+      const index = Number(match[1])
+      const field = match[2]
+      const item = formData.menuItems[index] || {}
+      const layout = item.layout || {}
+      const newLayout = { ...layout }
+      if (field === 'image') newLayout.imagePos = pos
+      if (field === 'name') newLayout.namePos = pos
+      if (field === 'desc') newLayout.descPos = pos
+      if (field === 'price') newLayout.pricePos = pos
+      handleMenuItemChange(index, 'layout', newLayout)
+    }
+  }
+
+  const onPreviewMouseMove = (e) => {
+    if (!draggingKey) return
+    const rect = getPreviewRect()
+    if (!rect) return
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const leftPct = clamp((x / rect.width) * 100, 0, 100)
+    const topPct = clamp((y / rect.height) * 100, 0, 100)
+    setPosForKey(draggingKey, { left: leftPct, top: topPct })
+  }
+
+  const stopDragging = () => setDraggingKey(null)
 
   const handleAddMenuItem = () => {
     setFormData(prev => ({
@@ -182,6 +269,15 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
     }
   }
 
+  // Allow saving directly from full-screen design mode
+  const saveFromDesign = async () => {
+    try {
+      await handleSubmit({ preventDefault: () => {} })
+    } catch (err) {
+      // no-op: handleSubmit already shows error
+    }
+  }
+
   const fontOptions = [
     'Arial, sans-serif',
     'Helvetica, sans-serif',
@@ -203,7 +299,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
           </h3>
           <div className="flex space-x-2">
             <button
-              onClick={() => setShowDesignPanel(!showDesignPanel)}
+              onClick={() => setShowFullScreenDesign(true)}
               className="flex items-center space-x-2 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
             >
               <Palette className="h-4 w-4" />
@@ -220,9 +316,9 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
       </div>
 
       <form onSubmit={handleSubmit} className="p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
           {/* Main Form */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="space-y-6">
             {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -393,282 +489,8 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
             </div>
           </div>
 
-          {/* Design Panel */}
-          {showDesignPanel && (
-            <div className="lg:col-span-1">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="text-md font-medium text-gray-900 mb-4 flex items-center">
-                  <Palette className="h-4 w-4 mr-2" />
-                  Design Settings
-                </h4>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Background Color
-                    </label>
-                    <input
-                      type="color"
-                      value={formData.design.backgroundColor}
-                      onChange={(e) => handleDesignChange('backgroundColor', e.target.value)}
-                      className="w-full h-10 border border-gray-300 rounded-md"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Background Image (optional)
-                    </label>
-                    <div className="space-y-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleBackgroundImageUpload(e.target.files[0])}
-                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 transition-colors"
-                      />
-                      {uploadingBackground && (
-                        <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-500"></div>
-                          <span>Uploading...</span>
-                        </div>
-                      )}
-                      {formData.design.backgroundImage && (
-                        <div className="relative">
-                          <img
-                            src={formData.design.backgroundImage}
-                            alt="Background"
-                            className="w-full h-20 object-cover rounded-md border border-gray-200"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleDesignChange('backgroundImage', '')}
-                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Text Color
-                    </label>
-                    <input
-                      type="color"
-                      value={formData.design.textColor}
-                      onChange={(e) => handleDesignChange('textColor', e.target.value)}
-                      className="w-full h-10 border border-gray-300 rounded-md"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Title Color
-                    </label>
-                    <input
-                      type="color"
-                      value={formData.design.titleColor}
-                      onChange={(e) => handleDesignChange('titleColor', e.target.value)}
-                      className="w-full h-10 border border-gray-300 rounded-md"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Price Color
-                    </label>
-                    <input
-                      type="color"
-                      value={formData.design.priceColor}
-                      onChange={(e) => handleDesignChange('priceColor', e.target.value)}
-                      className="w-full h-10 border border-gray-300 rounded-md"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Font Family
-                    </label>
-                    <select
-                      value={formData.design.fontFamily}
-                      onChange={(e) => handleDesignChange('fontFamily', e.target.value)}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      {fontOptions.map(font => (
-                        <option key={font} value={font}>
-                          {font.split(',')[0]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.design.showMenuName}
-                        onChange={(e) => handleDesignChange('showMenuName', e.target.checked)}
-                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Show Menu Name</span>
-                    </label>
-                  </div>
-
-                  {formData.design.showMenuName && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Menu Name Font Size
-                      </label>
-                      <select
-                        value={formData.design.menuNameFontSize}
-                        onChange={(e) => handleDesignChange('menuNameFontSize', e.target.value)}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      >
-                        <option value="2rem">Small</option>
-                        <option value="3rem">Medium</option>
-                        <option value="4rem">Large</option>
-                        <option value="5rem">Extra Large</option>
-                      </select>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Title Font Size
-                    </label>
-                    <select
-                      value={formData.design.titleFontSize}
-                      onChange={(e) => handleDesignChange('titleFontSize', e.target.value)}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      <option value="2rem">Small</option>
-                      <option value="3rem">Medium</option>
-                      <option value="4rem">Large</option>
-                      <option value="5rem">Extra Large</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Item Font Size
-                    </label>
-                    <select
-                      value={formData.design.itemFontSize}
-                      onChange={(e) => handleDesignChange('itemFontSize', e.target.value)}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      <option value="1rem">Small</option>
-                      <option value="1.5rem">Medium</option>
-                      <option value="2rem">Large</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Price Font Size
-                    </label>
-                    <select
-                      value={formData.design.priceFontSize}
-                      onChange={(e) => handleDesignChange('priceFontSize', e.target.value)}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      <option value="1rem">Small</option>
-                      <option value="1.2rem">Medium</option>
-                      <option value="1.5rem">Large</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Preview */}
-        {formData.menuItems.length > 0 && (
-          <div className="mt-8">
-            <h4 className="text-md font-medium text-gray-900 mb-4">Preview</h4>
-            <div 
-              className="border border-gray-300 rounded-lg p-6 relative overflow-hidden"
-              style={{
-                backgroundColor: formData.design.backgroundColor,
-                color: formData.design.textColor,
-                fontFamily: formData.design.fontFamily,
-                backgroundImage: formData.design.backgroundImage ? `url(${formData.design.backgroundImage})` : 'none',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat'
-              }}
-            >
-              {/* Background overlay for better text readability */}
-              {formData.design.backgroundImage && (
-                <div 
-                  className="absolute inset-0 bg-black bg-opacity-40"
-                  style={{ zIndex: 1 }}
-                ></div>
-              )}
-              
-              <div className="relative" style={{ zIndex: 2 }}>
-                {formData.design.showMenuName && (
-                  <h2 
-                    className="text-center mb-6 font-bold"
-                    style={{
-                      color: formData.design.titleColor,
-                      fontSize: formData.design.menuNameFontSize
-                    }}
-                  >
-                    {formData.name || 'Menu Title'}
-                  </h2>
-                )}
-                
-                {formData.description && (
-                  <p className="text-center mb-6 opacity-80" style={{ fontSize: formData.design.itemFontSize }}>
-                    {formData.description}
-                  </p>
-                )}
-
-                <div className="space-y-4">
-                  {formData.menuItems.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        {item.imageUrl && (
-                          <img
-                            src={item.imageUrl}
-                            alt={item.name}
-                            className="h-16 w-16 object-cover rounded-md"
-                          />
-                        )}
-                        <div>
-                          <h3 
-                            className="font-semibold"
-                            style={{ fontSize: formData.design.itemFontSize }}
-                          >
-                            {item.name || 'Item Name'}
-                          </h3>
-                          {item.description && (
-                            <p className="opacity-80 text-sm">{item.description}</p>
-                          )}
-                        </div>
-                      </div>
-                      {item.price && (
-                        <span 
-                          className="font-bold"
-                          style={{
-                            color: formData.design.priceColor,
-                            fontSize: formData.design.priceFontSize
-                          }}
-                        >
-                          {item.price}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Submit Button */}
         <div className="mt-8 flex justify-end space-x-3">
@@ -698,6 +520,415 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
           </button>
         </div>
       </form>
+
+      {/* Full Screen Design Mode */}
+      {showFullScreenDesign && (
+        <div className="fixed inset-0 bg-gray-900 z-50 flex flex-col">
+          {/* Top Navigation Bar */}
+          <div className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center">
+            <div className="flex items-center space-x-4">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                <Palette className="h-5 w-5 mr-2" />
+                Design Mode
+              </h2>
+              <span className="text-sm text-gray-500">
+                {formData.name || 'Untitled Menu'}
+              </span>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={saveFromDesign}
+                className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                title="Save Menu"
+              >
+                <Save className="h-4 w-4" />
+                <span>Save</span>
+              </button>
+              <button
+                onClick={() => setIsDragMode(!isDragMode)}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
+                  isDragMode 
+                    ? 'bg-primary-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                title="Toggle Drag Mode"
+              >
+                <Edit3 className="h-4 w-4" />
+                <span>{isDragMode ? 'Dragging Enabled' : 'Drag Mode'}</span>
+              </button>
+              <button
+                onClick={() => setShowDesignSettings(!showDesignSettings)}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
+                  showDesignSettings 
+                    ? 'bg-primary-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Settings className="h-4 w-4" />
+                <span>Design Settings</span>
+              </button>
+              
+              <button
+                onClick={() => setShowFullScreenDesign(false)}
+                className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                <X className="h-4 w-4" />
+                <span>Exit Design</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Main Content Area */}
+          <div 
+            className="flex-1 flex relative"
+            onMouseMove={onPreviewMouseMove}
+            onMouseUp={stopDragging}
+            onMouseLeave={stopDragging}
+          >
+            {/* Design Settings Panel */}
+            {showDesignSettings && (
+              <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
+                <div className="p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-6 flex items-center">
+                    <Settings className="h-5 w-5 mr-2" />
+                    Design Settings
+                  </h3>
+
+                  <div className="space-y-6">
+                    {/* Background Color */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        Background Color
+                      </label>
+                      <input
+                        type="color"
+                        value={formData.design.backgroundColor}
+                        onChange={(e) => handleDesignChange('backgroundColor', e.target.value)}
+                        className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Background Image */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        Background Image
+                      </label>
+                      <div className="space-y-3">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleBackgroundImageUpload(e.target.files[0])}
+                          className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 transition-colors"
+                        />
+                        {uploadingBackground && (
+                          <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-500"></div>
+                            <span>Uploading...</span>
+                          </div>
+                        )}
+                        {formData.design.backgroundImage && (
+                          <div className="relative">
+                            <img
+                              src={formData.design.backgroundImage}
+                              alt="Background"
+                              className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleDesignChange('backgroundImage', '')}
+                              className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Text Colors */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                          Text Color
+                        </label>
+                        <input
+                          type="color"
+                          value={formData.design.textColor}
+                          onChange={(e) => handleDesignChange('textColor', e.target.value)}
+                          className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                          Title Color
+                        </label>
+                        <input
+                          type="color"
+                          value={formData.design.titleColor}
+                          onChange={(e) => handleDesignChange('titleColor', e.target.value)}
+                          className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                          Price Color
+                        </label>
+                        <input
+                          type="color"
+                          value={formData.design.priceColor}
+                          onChange={(e) => handleDesignChange('priceColor', e.target.value)}
+                          className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Font Settings */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        Font Family
+                      </label>
+                      <select
+                        value={formData.design.fontFamily}
+                        onChange={(e) => handleDesignChange('fontFamily', e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      >
+                        {fontOptions.map(font => (
+                          <option key={font} value={font}>
+                            {font.split(',')[0]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Menu Name Toggle */}
+                    <div>
+                      <label className="flex items-center space-x-3">
+                        <input
+                          type="checkbox"
+                          checked={formData.design.showMenuName}
+                          onChange={(e) => handleDesignChange('showMenuName', e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Show Menu Name</span>
+                      </label>
+                    </div>
+
+                    {/* Font Sizes */}
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-medium text-gray-700">Font Sizes</h4>
+                      
+                      {formData.design.showMenuName && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-2">
+                            Menu Name
+                          </label>
+                          <select
+                            value={formData.design.menuNameFontSize}
+                            onChange={(e) => handleDesignChange('menuNameFontSize', e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                          >
+                            <option value="2rem">Small</option>
+                            <option value="3rem">Medium</option>
+                            <option value="4rem">Large</option>
+                            <option value="5rem">Extra Large</option>
+                          </select>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-2">
+                          Item Names
+                        </label>
+                        <select
+                          value={formData.design.itemFontSize}
+                          onChange={(e) => handleDesignChange('itemFontSize', e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        >
+                          <option value="1rem">Small</option>
+                          <option value="1.5rem">Medium</option>
+                          <option value="2rem">Large</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-2">
+                          Prices
+                        </label>
+                        <select
+                          value={formData.design.priceFontSize}
+                          onChange={(e) => handleDesignChange('priceFontSize', e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        >
+                          <option value="1rem">Small</option>
+                          <option value="1.2rem">Medium</option>
+                          <option value="1.5rem">Large</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Preview Area */}
+            <div className="flex-1 flex items-center justify-center p-4 bg-gray-100">
+              <div 
+                className="rounded-lg shadow-2xl relative overflow-hidden"
+                ref={previewRef}
+                style={{
+                  width: '1280px', // 1920 * 2/3 for larger preview
+                  height: '720px', // 1080 * 2/3 for larger preview (maintains 16:9 ratio)
+                  backgroundColor: formData.design.backgroundColor,
+                  color: formData.design.textColor,
+                  fontFamily: formData.design.fontFamily,
+                  backgroundImage: formData.design.backgroundImage ? `url(${formData.design.backgroundImage})` : 'none',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  backgroundRepeat: 'no-repeat'
+                }}
+              >
+                {/* Background overlay removed for cleaner preview */}
+                
+                <div className="relative h-full p-12" style={{ zIndex: 2 }}>
+                  {formData.design.showMenuName && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: `${getPosForKey('title').left}%`,
+                        top: `${getPosForKey('title').top}%`,
+                        transform: 'translate(-0%, -0%)',
+                        cursor: isDragMode ? 'move' : 'default'
+                      }}
+                      onMouseDown={() => isDragMode && setDraggingKey('title')}
+                    >
+                      <h1 
+                        className="font-bold"
+                        style={{
+                          color: formData.design.titleColor,
+                          fontSize: formData.design.menuNameFontSize,
+                          textAlign: 'center'
+                        }}
+                      >
+                        {formData.name || 'Menu Title'}
+                      </h1>
+                    </div>
+                  )}
+
+                  {formData.description && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: `${getPosForKey('menuDescription').left}%`,
+                        top: `${getPosForKey('menuDescription').top}%`,
+                        transform: 'translate(-0%, -0%)',
+                        cursor: isDragMode ? 'move' : 'default'
+                      }}
+                      onMouseDown={() => isDragMode && setDraggingKey('menuDescription')}
+                    >
+                      <p style={{ fontSize: formData.design.itemFontSize }}>
+                        {formData.description}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="absolute inset-0" style={{ pointerEvents: isDragMode ? 'auto' : 'none' }} />
+
+                  <div className="flex-1 space-y-6 overflow-y-auto">
+                    {formData.menuItems.length === 0 ? (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center text-gray-500">
+                          <ImageIcon className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                          <p className="text-lg opacity-60">No menu items yet</p>
+                          <p className="text-sm">Add items to see your menu preview</p>
+                        </div>
+                      </div>
+                    ) : (
+                      formData.menuItems.map((item, index) => (
+                        <div key={index}>
+                          {/* Item Image */}
+                          {item.imageUrl && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                left: `${getPosForKey(`item-${index}-image`).left}%`,
+                                top: `${getPosForKey(`item-${index}-image`).top}%`,
+                                cursor: isDragMode ? 'move' : 'default'
+                              }}
+                              onMouseDown={() => isDragMode && setDraggingKey(`item-${index}-image`)}
+                            >
+                              <img
+                                src={item.imageUrl}
+                                alt={item.name}
+                                className="h-20 w-20 object-cover rounded-lg shadow-md"
+                              />
+                            </div>
+                          )}
+                          {/* Item Name */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: `${getPosForKey(`item-${index}-name`).left}%`,
+                              top: `${getPosForKey(`item-${index}-name`).top}%`,
+                              cursor: isDragMode ? 'move' : 'default'
+                            }}
+                            onMouseDown={() => isDragMode && setDraggingKey(`item-${index}-name`)}
+                          >
+                            <h3 
+                              className="font-semibold"
+                              style={{ fontSize: formData.design.itemFontSize }}
+                            >
+                              {item.name || 'Item Name'}
+                            </h3>
+                          </div>
+
+                          {/* Item Description */}
+                          {item.description && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                left: `${getPosForKey(`item-${index}-desc`).left}%`,
+                                top: `${getPosForKey(`item-${index}-desc`).top}%`,
+                                cursor: isDragMode ? 'move' : 'default'
+                              }}
+                              onMouseDown={() => isDragMode && setDraggingKey(`item-${index}-desc`)}
+                            >
+                              <p className="opacity-80" style={{ fontSize: '1rem' }}>{item.description}</p>
+                            </div>
+                          )}
+
+                          {/* Item Price */}
+                          {item.price && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                left: `${getPosForKey(`item-${index}-price`).left}%`,
+                                top: `${getPosForKey(`item-${index}-price`).top}%`,
+                                cursor: isDragMode ? 'move' : 'default'
+                              }}
+                              onMouseDown={() => isDragMode && setDraggingKey(`item-${index}-price`)}
+                            >
+                              <span 
+                                className="font-bold"
+                                style={{
+                                  color: formData.design.priceColor,
+                                  fontSize: formData.design.priceFontSize
+                                }}
+                              >
+                                {item.price}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
