@@ -29,6 +29,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
       fontFamily: 'Arial, sans-serif',
       titleFontSize: '3rem',
       itemFontSize: '1.5rem',
+      descriptionFontSize: '16px',
       priceFontSize: '1.2rem',
       showMenuName: true,
       menuNameFontSize: '3rem',
@@ -45,6 +46,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
   const [isDragMode, setIsDragMode] = useState(false)
   const previewRef = useRef(null)
   const [draggingKey, setDraggingKey] = useState(null)
+  const [resizingState, setResizingState] = useState(null) // { index, startX, startY, startW, startH, handle }
 
   const getPreviewRect = () => {
     const el = previewRef.current
@@ -88,6 +90,21 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
     return getDefaultPosForKey(key)
   }
 
+  const getImageSizeForIndex = (index) => {
+    const layout = formData.menuItems[index]?.layout || {}
+    // default 80px square thumbnail similar to existing h-20 w-20
+    const width = typeof layout.imageWidth === 'number' ? layout.imageWidth : 80
+    const height = typeof layout.imageHeight === 'number' ? layout.imageHeight : 80
+    return { width, height }
+  }
+
+  const setImageSizeForIndex = (index, size) => {
+    const item = formData.menuItems[index] || {}
+    const layout = item.layout || {}
+    const newLayout = { ...layout, imageWidth: size.width, imageHeight: size.height }
+    handleMenuItemChange(index, 'layout', newLayout)
+  }
+
   const setPosForKey = (key, pos) => {
     if (key === 'title') {
       handleDesignChange('titlePos', pos)
@@ -113,17 +130,73 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
   }
 
   const onPreviewMouseMove = (e) => {
+    if (resizingState) {
+      const rect = getPreviewRect()
+      if (!rect) return
+      const dx = e.clientX - resizingState.startX
+      const dy = e.clientY - resizingState.startY
+      let newW = resizingState.startW
+      let newH = resizingState.startH
+      // Simple aspect-free resizing; modify based on handle
+      if (resizingState.handle === 'se') {
+        newW = Math.max(20, resizingState.startW + dx)
+        newH = Math.max(20, resizingState.startH + dy)
+      } else if (resizingState.handle === 'e') {
+        newW = Math.max(20, resizingState.startW + dx)
+      } else if (resizingState.handle === 's') {
+        newH = Math.max(20, resizingState.startH + dy)
+      }
+
+      // Clamp to preview bounds roughly
+      const maxW = rect.width
+      const maxH = rect.height
+      newW = clamp(newW, 20, maxW)
+      newH = clamp(newH, 20, maxH)
+      setImageSizeForIndex(resizingState.index, { width: Math.round(newW), height: Math.round(newH) })
+      return
+    }
     if (!draggingKey) return
     const rect = getPreviewRect()
     if (!rect) return
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-    const leftPct = clamp((x / rect.width) * 100, 0, 100)
-    const topPct = clamp((y / rect.height) * 100, 0, 100)
+    
+    // Calculate maximum allowed positions to keep elements within bounds
+    // Use conservative estimates for different element types
+    let maxElementWidth = 150 // pixels - conservative estimate
+    let maxElementHeight = 80 // pixels - conservative estimate
+    
+    // Adjust based on element type for better boundaries
+    if (draggingKey === 'title') {
+      maxElementWidth = 300
+      maxElementHeight = 100
+    } else if (draggingKey === 'menuDescription') {
+      maxElementWidth = 400
+      maxElementHeight = 60
+    } else if (draggingKey.includes('image')) {
+      maxElementWidth = 100
+      maxElementHeight = 100
+    } else if (draggingKey.includes('name')) {
+      maxElementWidth = 200
+      maxElementHeight = 40
+    } else if (draggingKey.includes('desc')) {
+      maxElementWidth = 300
+      maxElementHeight = 50
+    } else if (draggingKey.includes('price')) {
+      maxElementWidth = 150
+      maxElementHeight = 40
+    }
+    
+    const maxLeftPct = Math.max(0, 100 - (maxElementWidth / rect.width) * 100)
+    const maxTopPct = Math.max(0, 100 - (maxElementHeight / rect.height) * 100)
+    
+    const leftPct = clamp((x / rect.width) * 100, 0, maxLeftPct)
+    const topPct = clamp((y / rect.height) * 100, 0, maxTopPct)
     setPosForKey(draggingKey, { left: leftPct, top: topPct })
   }
 
   const stopDragging = () => setDraggingKey(null)
+  const stopResizing = () => setResizingState(null)
 
   const handleAddMenuItem = () => {
     setFormData(prev => ({
@@ -267,6 +340,17 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
     } finally {
       setLoading(false)
     }
+  }
+
+  const parseFontToPx = (value) => {
+    if (value == null) return 16
+    if (typeof value === 'number') return value
+    const str = String(value).trim()
+    if (str.endsWith('px')) return parseInt(str, 10) || 0
+    if (str.endsWith('rem')) return Math.round((parseFloat(str) || 0) * 16)
+    if (str.endsWith('em')) return Math.round((parseFloat(str) || 0) * 16)
+    const num = parseFloat(str)
+    return Number.isNaN(num) ? 16 : num
   }
 
   // Allow saving directly from full-screen design mode
@@ -581,15 +665,15 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
 
           {/* Main Content Area */}
           <div 
-            className="flex-1 flex relative"
+            className="flex-1 flex relative min-h-0"
             onMouseMove={onPreviewMouseMove}
-            onMouseUp={stopDragging}
-            onMouseLeave={stopDragging}
+            onMouseUp={() => { stopDragging(); stopResizing(); }}
+            onMouseLeave={() => { stopDragging(); stopResizing(); }}
           >
             {/* Design Settings Panel */}
             {showDesignSettings && (
-              <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
-                <div className="p-6">
+              <div className="w-80 bg-white border-r border-gray-200 h-full overflow-y-auto">
+                <div className="p-6 pb-24">
                   <h3 className="text-lg font-medium text-gray-900 mb-6 flex items-center">
                     <Settings className="h-5 w-5 mr-2" />
                     Design Settings
@@ -721,49 +805,63 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                       {formData.design.showMenuName && (
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-2">
-                            Menu Name
+                            Menu Name (px)
                           </label>
-                          <select
-                            value={formData.design.menuNameFontSize}
-                            onChange={(e) => handleDesignChange('menuNameFontSize', e.target.value)}
+                          <input
+                            type="number"
+                            min={8}
+                            max={200}
+                            step={1}
+                            value={parseFontToPx(formData.design.menuNameFontSize)}
+                            onChange={(e) => handleDesignChange('menuNameFontSize', `${e.target.value}px`)}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          >
-                            <option value="2rem">Small</option>
-                            <option value="3rem">Medium</option>
-                            <option value="4rem">Large</option>
-                            <option value="5rem">Extra Large</option>
-                          </select>
+                          />
                         </div>
                       )}
 
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-2">
-                          Item Names
+                          Item Names (px)
                         </label>
-                        <select
-                          value={formData.design.itemFontSize}
-                          onChange={(e) => handleDesignChange('itemFontSize', e.target.value)}
+                        <input
+                          type="number"
+                          min={8}
+                          max={120}
+                          step={1}
+                          value={parseFontToPx(formData.design.itemFontSize)}
+                          onChange={(e) => handleDesignChange('itemFontSize', `${e.target.value}px`)}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        >
-                          <option value="1rem">Small</option>
-                          <option value="1.5rem">Medium</option>
-                          <option value="2rem">Large</option>
-                        </select>
+                        />
                       </div>
 
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-2">
-                          Prices
+                          Item Descriptions (px)
                         </label>
-                        <select
-                          value={formData.design.priceFontSize}
-                          onChange={(e) => handleDesignChange('priceFontSize', e.target.value)}
+                        <input
+                          type="number"
+                          min={8}
+                          max={120}
+                          step={1}
+                          value={parseFontToPx(formData.design.descriptionFontSize)}
+                          onChange={(e) => handleDesignChange('descriptionFontSize', `${e.target.value}px`)}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        >
-                          <option value="1rem">Small</option>
-                          <option value="1.2rem">Medium</option>
-                          <option value="1.5rem">Large</option>
-                        </select>
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-2">
+                          Prices (px)
+                        </label>
+                        <input
+                          type="number"
+                          min={8}
+                          max={120}
+                          step={1}
+                          value={parseFontToPx(formData.design.priceFontSize)}
+                          onChange={(e) => handleDesignChange('priceFontSize', `${e.target.value}px`)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        />
                       </div>
                     </div>
                   </div>
@@ -785,7 +883,9 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                   backgroundImage: formData.design.backgroundImage ? `url(${formData.design.backgroundImage})` : 'none',
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
-                  backgroundRepeat: 'no-repeat'
+                  backgroundRepeat: 'no-repeat',
+                  border: isDragMode ? '2px dashed #3B82F6' : 'none',
+                  boxShadow: isDragMode ? '0 0 0 1px rgba(59, 130, 246, 0.1)' : '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
                 }}
               >
                 {/* Background overlay removed for cleaner preview */}
@@ -798,9 +898,15 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                         left: `${getPosForKey('title').left}%`,
                         top: `${getPosForKey('title').top}%`,
                         transform: 'translate(-0%, -0%)',
-                        cursor: isDragMode ? 'move' : 'default'
+                        cursor: isDragMode ? 'move' : 'default',
+                        userSelect: isDragMode ? 'none' : 'auto'
                       }}
-                      onMouseDown={() => isDragMode && setDraggingKey('title')}
+                      onMouseDown={(e) => {
+                        if (isDragMode) {
+                          e.preventDefault()
+                          setDraggingKey('title')
+                        }
+                      }}
                     >
                       <h1 
                         className="font-bold"
@@ -822,11 +928,17 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                         left: `${getPosForKey('menuDescription').left}%`,
                         top: `${getPosForKey('menuDescription').top}%`,
                         transform: 'translate(-0%, -0%)',
-                        cursor: isDragMode ? 'move' : 'default'
+                        cursor: isDragMode ? 'move' : 'default',
+                        userSelect: isDragMode ? 'none' : 'auto'
                       }}
-                      onMouseDown={() => isDragMode && setDraggingKey('menuDescription')}
+                      onMouseDown={(e) => {
+                        if (isDragMode) {
+                          e.preventDefault()
+                          setDraggingKey('menuDescription')
+                        }
+                      }}
                     >
-                      <p style={{ fontSize: formData.design.itemFontSize }}>
+                      <p style={{ fontSize: formData.design.descriptionFontSize }}>
                         {formData.description}
                       </p>
                     </div>
@@ -853,15 +965,90 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                                 position: 'absolute',
                                 left: `${getPosForKey(`item-${index}-image`).left}%`,
                                 top: `${getPosForKey(`item-${index}-image`).top}%`,
-                                cursor: isDragMode ? 'move' : 'default'
+                                cursor: isDragMode ? 'move' : 'default',
+                                userSelect: isDragMode ? 'none' : 'auto'
                               }}
-                              onMouseDown={() => isDragMode && setDraggingKey(`item-${index}-image`)}
+                              onMouseDown={(e) => {
+                                if (isDragMode) {
+                                  e.preventDefault()
+                                  setDraggingKey(`item-${index}-image`)
+                                }
+                              }}
                             >
-                              <img
-                                src={item.imageUrl}
-                                alt={item.name}
-                                className="h-20 w-20 object-cover rounded-lg shadow-md"
-                              />
+                              {(() => {
+                                const size = getImageSizeForIndex(index)
+                                return (
+                                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                                    <img
+                                      src={item.imageUrl}
+                                      alt={item.name}
+                                      style={{ width: `${size.width}px`, height: `${size.height}px` }}
+                                      className="object-cover rounded-lg shadow-md select-none"
+                                      draggable={false}
+                                    />
+                                    {isDragMode && (
+                                      <>
+                                        <div
+                                          style={{
+                                            position: 'absolute',
+                                            right: '-6px',
+                                            bottom: '-6px',
+                                            width: '12px',
+                                            height: '12px',
+                                            background: '#3B82F6',
+                                            borderRadius: '9999px',
+                                            cursor: 'se-resize',
+                                            boxShadow: '0 0 0 2px white'
+                                          }}
+                                          onMouseDown={(e) => {
+                                            e.stopPropagation()
+                                            const current = getImageSizeForIndex(index)
+                                            setResizingState({ index, startX: e.clientX, startY: e.clientY, startW: current.width, startH: current.height, handle: 'se' })
+                                          }}
+                                        />
+                                        <div
+                                          style={{
+                                            position: 'absolute',
+                                            right: '-6px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            width: '12px',
+                                            height: '12px',
+                                            background: '#3B82F6',
+                                            borderRadius: '9999px',
+                                            cursor: 'e-resize',
+                                            boxShadow: '0 0 0 2px white'
+                                          }}
+                                          onMouseDown={(e) => {
+                                            e.stopPropagation()
+                                            const current = getImageSizeForIndex(index)
+                                            setResizingState({ index, startX: e.clientX, startY: e.clientY, startW: current.width, startH: current.height, handle: 'e' })
+                                          }}
+                                        />
+                                        <div
+                                          style={{
+                                            position: 'absolute',
+                                            left: '50%',
+                                            bottom: '-6px',
+                                            transform: 'translateX(-50%)',
+                                            width: '12px',
+                                            height: '12px',
+                                            background: '#3B82F6',
+                                            borderRadius: '9999px',
+                                            cursor: 's-resize',
+                                            boxShadow: '0 0 0 2px white'
+                                          }}
+                                          onMouseDown={(e) => {
+                                            e.stopPropagation()
+                                            const current = getImageSizeForIndex(index)
+                                            setResizingState({ index, startX: e.clientX, startY: e.clientY, startW: current.width, startH: current.height, handle: 's' })
+                                          }}
+                                        />
+                                      </>
+                                    )}
+                                  </div>
+                                )
+                              })()}
                             </div>
                           )}
                           {/* Item Name */}
@@ -870,9 +1057,15 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                               position: 'absolute',
                               left: `${getPosForKey(`item-${index}-name`).left}%`,
                               top: `${getPosForKey(`item-${index}-name`).top}%`,
-                              cursor: isDragMode ? 'move' : 'default'
+                              cursor: isDragMode ? 'move' : 'default',
+                              userSelect: isDragMode ? 'none' : 'auto'
                             }}
-                            onMouseDown={() => isDragMode && setDraggingKey(`item-${index}-name`)}
+                            onMouseDown={(e) => {
+                              if (isDragMode) {
+                                e.preventDefault()
+                                setDraggingKey(`item-${index}-name`)
+                              }
+                            }}
                           >
                             <h3 
                               className="font-semibold"
@@ -889,11 +1082,17 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                                 position: 'absolute',
                                 left: `${getPosForKey(`item-${index}-desc`).left}%`,
                                 top: `${getPosForKey(`item-${index}-desc`).top}%`,
-                                cursor: isDragMode ? 'move' : 'default'
+                                cursor: isDragMode ? 'move' : 'default',
+                                userSelect: isDragMode ? 'none' : 'auto'
                               }}
-                              onMouseDown={() => isDragMode && setDraggingKey(`item-${index}-desc`)}
+                              onMouseDown={(e) => {
+                                if (isDragMode) {
+                                  e.preventDefault()
+                                  setDraggingKey(`item-${index}-desc`)
+                                }
+                              }}
                             >
-                              <p className="opacity-80" style={{ fontSize: '1rem' }}>{item.description}</p>
+                              <p className="opacity-80" style={{ fontSize: formData.design.descriptionFontSize }}>{item.description}</p>
                             </div>
                           )}
 
@@ -904,9 +1103,15 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                                 position: 'absolute',
                                 left: `${getPosForKey(`item-${index}-price`).left}%`,
                                 top: `${getPosForKey(`item-${index}-price`).top}%`,
-                                cursor: isDragMode ? 'move' : 'default'
+                                cursor: isDragMode ? 'move' : 'default',
+                                userSelect: isDragMode ? 'none' : 'auto'
                               }}
-                              onMouseDown={() => isDragMode && setDraggingKey(`item-${index}-price`)}
+                              onMouseDown={(e) => {
+                                if (isDragMode) {
+                                  e.preventDefault()
+                                  setDraggingKey(`item-${index}-price`)
+                                }
+                              }}
                             >
                               <span 
                                 className="font-bold"

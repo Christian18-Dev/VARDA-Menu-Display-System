@@ -42,7 +42,9 @@ const menuItemSchema = new mongoose.Schema({
     namePos: { type: positionSchema, default: undefined },
     descPos: { type: positionSchema, default: undefined },
     pricePos: { type: positionSchema, default: undefined },
-    imagePos: { type: positionSchema, default: undefined }
+    imagePos: { type: positionSchema, default: undefined },
+    imageWidth: { type: Number, default: undefined },
+    imageHeight: { type: Number, default: undefined }
   }
 });
 
@@ -112,6 +114,10 @@ const menuSchema = new mongoose.Schema({
     itemFontSize: {
       type: String,
       default: '1.5rem'
+    },
+    descriptionFontSize: {
+      type: String,
+      default: '16px'
     },
     priceFontSize: {
       type: String,

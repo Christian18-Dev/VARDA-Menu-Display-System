@@ -403,6 +403,13 @@ const DisplayPage = () => {
 
     const useFreeLayout = hasAnyPositions()
 
+    const getImageSizeForIndex = (idx) => {
+      const layout = currentMenu.menuItems?.[idx]?.layout || {}
+      const width = typeof layout.imageWidth === 'number' ? layout.imageWidth : 96
+      const height = typeof layout.imageHeight === 'number' ? layout.imageHeight : 96
+      return { width, height }
+    }
+
     return (
       <div className="min-h-screen relative overflow-hidden">
         <div 
@@ -427,14 +434,16 @@ const DisplayPage = () => {
               )}
               {currentMenu.description && (
                 <div style={{ position: 'absolute', left: `${getPosForKey('menuDescription').left}%`, top: `${getPosForKey('menuDescription').top}%` }}>
-                  <p className="opacity-80" style={{ fontSize: design.itemFontSize || '1.5rem' }}>{currentMenu.description}</p>
+                  <p className="opacity-80" style={{ fontSize: design.descriptionFontSize || '16px' }}>{currentMenu.description}</p>
                 </div>
               )}
               {(currentMenu.menuItems || []).map((item, index) => (
                 <div key={index}>
                   {item.imageUrl && (
                     <div style={{ position: 'absolute', left: `${getPosForKey(`item-${index}-image`).left}%`, top: `${getPosForKey(`item-${index}-image`).top}%` }}>
-                      <img src={item.imageUrl} alt={item.name} className="h-24 w-24 object-cover rounded-lg shadow-lg" />
+                      {(() => { const size = getImageSizeForIndex(index); return (
+                        <img src={item.imageUrl} alt={item.name} className="object-cover rounded-lg shadow-lg" style={{ width: `${size.width}px`, height: `${size.height}px` }} />
+                      ) })()}
                     </div>
                   )}
                   <div style={{ position: 'absolute', left: `${getPosForKey(`item-${index}-name`).left}%`, top: `${getPosForKey(`item-${index}-name`).top}%` }}>
@@ -442,7 +451,7 @@ const DisplayPage = () => {
                   </div>
                   {item.description && (
                     <div style={{ position: 'absolute', left: `${getPosForKey(`item-${index}-desc`).left}%`, top: `${getPosForKey(`item-${index}-desc`).top}%` }}>
-                      <p className="opacity-80">{item.description}</p>
+                      <p className="opacity-80" style={{ fontSize: design.descriptionFontSize || '16px' }}>{item.description}</p>
                     </div>
                   )}
                   {item.price && (
@@ -466,7 +475,9 @@ const DisplayPage = () => {
                   {currentMenu.menuItems.map((item, index) => (
                     <div key={index} className="flex items-center justify-between">
                       <div className="flex items-center space-x-6">
-                        {item.imageUrl && (<img src={item.imageUrl} alt={item.name} className="h-24 w-24 object-cover rounded-lg shadow-lg" />)}
+                        {item.imageUrl && (() => { const size = getImageSizeForIndex(index); return (
+                          <img src={item.imageUrl} alt={item.name} className="object-cover rounded-lg shadow-lg" style={{ width: `${size.width}px`, height: `${size.height}px` }} />
+                        ) })()}
                         <div>
                           <h3 className="font-semibold" style={{ fontSize: design.itemFontSize || '1.5rem' }}>{item.name}</h3>
                           {item.description && <p className="opacity-80 mt-1">{item.description}</p>}
