@@ -148,7 +148,7 @@ const menuSchema = new mongoose.Schema({
   },
   branch: {
     type: String,
-    default: 'Ateneo'
+    default: 'ateneo'
   }
 }, {
   timestamps: true

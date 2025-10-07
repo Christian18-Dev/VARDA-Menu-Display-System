@@ -19,7 +19,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
     name: menu?.name || '',
     description: menu?.description || '',
     category: menu?.category || 'general',
-    branch: menu?.branch || 'Ateneo',
+    branch: menu?.branch || '',
     menuItems: menu?.menuItems || [],
     design: menu?.design || {
       backgroundColor: '#000000',
@@ -445,12 +445,12 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                   onChange={(e) => setFormData({...formData, branch: e.target.value})}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
-                  <option value="Ateneo">Ateneo</option>
-                  <option value="Lasalle">Lasalle</option>
-                  <option value="PUP">PUP</option>
-                  <option value="UST">UST</option>
-                  <option value="FEU">FEU</option>
-                  <option value="Mapua">Mapua</option>
+                  <option value="" disabled>Select your University</option>
+                  <option value="ateneo">Ateneo de Manila University</option>
+                  <option value="lpudavao">Lyceum of the Philippines - Davao</option>
+                  <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
+                  <option value="mapuamakati">Mapúa University Makati</option>
+                  <option value="dlsulipa">De La Salle Lipa</option>
                 </select>
               </div>
             </div>

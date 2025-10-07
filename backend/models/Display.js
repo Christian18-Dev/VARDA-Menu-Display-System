@@ -19,7 +19,7 @@ const displaySchema = new mongoose.Schema({
   },
   branch: {
     type: String,
-    default: 'Ateneo'
+    default: 'ateneo'
   },
   currentMenus: [{
     menu: {
