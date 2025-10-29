@@ -18,6 +18,7 @@ const DisplayPage = () => {
   const [slideshowInterval, setSlideshowInterval] = useState(5000)
   const [transitionType, setTransitionType] = useState('normal')
   const [isPaused, setIsPaused] = useState(false)
+  const [referenceStartTime, setReferenceStartTime] = useState(null)
   
 
   
@@ -177,6 +178,8 @@ const DisplayPage = () => {
             setNextImageIndex(0)
             setNextMenuIndex(0)
             setIsPaused(false)
+            // Align the scheduler to the shared target time
+            setReferenceStartTime(targetTime)
             if (countdownEl) countdownEl.style.display = 'none'
           } else {
             requestAnimationFrame(tick)
@@ -219,78 +222,100 @@ const DisplayPage = () => {
     }
   }
 
-  // Slideshow effect
+  // Initialize reference start time on first load if not already set
   useEffect(() => {
-    if (isPaused || currentMenus.length === 0) return
+    if (!referenceStartTime) {
+      setReferenceStartTime(Date.now())
+    }
+  }, [referenceStartTime])
 
-    const interval = setInterval(() => {
-      const currentMenu = currentMenus[currentMenuIndex]
-      if (!currentMenu) return
-      
-      // For custom-based menus, we don't need image slideshow
-      if (currentMenu.menuType === 'custom') {
-        // Move to next menu after a delay
-        setCurrentMenuIndex(prevMenuIndex => {
-          const nextMenuIndex = prevMenuIndex + 1
-          if (nextMenuIndex >= currentMenus.length) {
-            return 0 // Loop back to first menu
-          }
-          return nextMenuIndex
-        })
-        return
-      }
-      
-      // For image-based menus, handle image slideshow
-      if (!currentMenu.images) return
-      
-      if (transitionType === 'push') {
-        // Handle push animation
-        const nextImgIndex = currentImageIndex + 1
-        let nextMenuIdx = currentMenuIndex
-        let nextImgIdx = nextImgIndex
-        
-        if (nextImgIndex >= currentMenu.images.length) {
-          // Move to next menu
-          nextMenuIdx = currentMenuIndex + 1
-          if (nextMenuIdx >= currentMenus.length) {
-            nextMenuIdx = 0 // Loop back to first menu
-          }
-          nextImgIdx = 0 // Reset image index for new menu
+  // Build a deterministic mapping of steps across all menus
+  const buildStepMapping = () => {
+    const mapping = []
+    currentMenus.forEach((menu, mIdx) => {
+      if (menu?.menuType === 'custom') {
+        mapping.push({ menuIndex: mIdx, imageIndex: null })
+      } else if (Array.isArray(menu?.images) && menu.images.length > 0) {
+        for (let i = 0; i < menu.images.length; i++) {
+          mapping.push({ menuIndex: mIdx, imageIndex: i })
         }
-        
-        // Set next image/menu for push animation
-        setNextImageIndex(nextImgIdx)
-        setNextMenuIndex(nextMenuIdx)
-        setIsPushing(true)
-        
-        // After animation completes, update current indices
-        setTimeout(() => {
-          setCurrentImageIndex(nextImgIdx)
-          setCurrentMenuIndex(nextMenuIdx)
-          setIsPushing(false)
-        }, 2000) // Animation duration
-      } else {
-        // Normal slideshow mode
-        setCurrentImageIndex(prevIndex => {
-          const nextImageIndex = prevIndex + 1
-          if (nextImageIndex >= currentMenu.images.length) {
-            // Move to next menu
-            setCurrentMenuIndex(prevMenuIndex => {
-              const nextMenuIndex = prevMenuIndex + 1
-              if (nextMenuIndex >= currentMenus.length) {
-                return 0 // Loop back to first menu
-              }
-              return nextMenuIndex
-            })
-            return 0 // Reset image index for new menu
-          }
-          return nextImageIndex
-        })
       }
-    }, slideshowInterval)
+    })
+    return mapping
+  }
 
-    return () => clearInterval(interval)
-  }, [currentMenus, currentMenuIndex, currentImageIndex, slideshowInterval, transitionType, isPaused])
+  // Boundary-based scheduler to avoid timer drift
+  useEffect(() => {
+    if (isPaused || currentMenus.length === 0 || !referenceStartTime) return
+
+    let cancelled = false
+    let pushTimeout = null
+    let boundaryTimeout = null
+
+    const mapping = buildStepMapping()
+    if (mapping.length === 0) return
+
+    const schedule = () => {
+      if (cancelled) return
+      const now = Date.now()
+      const intervalMs = Math.max(1000, Number(slideshowInterval) || 5000)
+      const elapsed = Math.max(0, now - referenceStartTime)
+      const step = Math.floor(elapsed / intervalMs)
+      const stepIndex = step % mapping.length
+
+      // Set current indices for this step
+      const currentStep = mapping[stepIndex]
+      setCurrentMenuIndex(currentStep.menuIndex)
+      setCurrentImageIndex(currentStep.imageIndex ?? 0)
+
+      const nextBoundary = referenceStartTime + (step + 1) * intervalMs
+      const msUntilNext = Math.max(0, nextBoundary - now)
+
+      if (transitionType === 'push') {
+        const animationLead = 2000 // ms before boundary to start push animation
+        const msUntilAnim = Math.max(0, msUntilNext - animationLead)
+
+        // Prepare next indices and start push animation before boundary
+        pushTimeout = setTimeout(() => {
+          if (cancelled) return
+          const nextStepIndex = (stepIndex + 1) % mapping.length
+          const nextStep = mapping[nextStepIndex]
+          setNextMenuIndex(nextStep.menuIndex)
+          setNextImageIndex(nextStep.imageIndex ?? 0)
+          setIsPushing(true)
+        }, msUntilAnim)
+
+        // Commit to next step exactly at the boundary
+        boundaryTimeout = setTimeout(() => {
+          if (cancelled) return
+          const nextStepIndex = (stepIndex + 1) % mapping.length
+          const nextStep = mapping[nextStepIndex]
+          setCurrentMenuIndex(nextStep.menuIndex)
+          setCurrentImageIndex(nextStep.imageIndex ?? 0)
+          setIsPushing(false)
+          schedule() // chain next cycle
+        }, msUntilNext)
+      } else {
+        // Normal mode: switch exactly at boundary
+        boundaryTimeout = setTimeout(() => {
+          if (cancelled) return
+          const nextStepIndex = (stepIndex + 1) % mapping.length
+          const nextStep = mapping[nextStepIndex]
+          setCurrentMenuIndex(nextStep.menuIndex)
+          setCurrentImageIndex(nextStep.imageIndex ?? 0)
+          schedule()
+        }, msUntilNext)
+      }
+    }
+
+    schedule()
+
+    return () => {
+      cancelled = true
+      if (pushTimeout) clearTimeout(pushTimeout)
+      if (boundaryTimeout) clearTimeout(boundaryTimeout)
+    }
+  }, [isPaused, currentMenus, slideshowInterval, transitionType, referenceStartTime])
 
   // Reset indices when menus change
   useEffect(() => {
