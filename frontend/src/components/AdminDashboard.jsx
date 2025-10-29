@@ -118,7 +118,7 @@ const AdminDashboard = () => {
     name: '',
     description: '',
     category: 'general',
-    branch: 'Ateneo',
+    branch: '',
     images: [],
     _id: null, // Add ID field for editing
     existingImages: [], // Track existing images for editing
@@ -128,7 +128,7 @@ const AdminDashboard = () => {
     name: '',
     displayId: '',
     location: '',
-    branch: 'Ateneo'
+    branch: ''
   })
   const [displayMenus, setDisplayMenus] = useState({}) // { displayId: { menuIds: [], slideshowInterval: 5000, transitionType: 'normal' } }
 
@@ -316,7 +316,7 @@ const AdminDashboard = () => {
         name: '', 
         description: '', 
         category: 'general', 
-        branch: 'Ateneo', 
+        branch: '', 
         images: [],
         _id: null,
         existingImages: [],
@@ -337,7 +337,7 @@ const AdminDashboard = () => {
     e.preventDefault()
     try {
       await createDisplay(displayForm)
-      setDisplayForm({ name: '', displayId: '', location: '', branch: 'Ateneo' })
+      setDisplayForm({ name: '', displayId: '', location: '', branch: '' })
       setShowCreateForm(false)
       setSuccessMessage('Display created successfully!')
       fetchData()
@@ -496,7 +496,7 @@ const AdminDashboard = () => {
       name: '',
       description: '',
       category: 'general',
-      branch: 'Ateneo',
+      branch: '',
       images: [],
       _id: null,
       existingImages: [],
@@ -523,7 +523,7 @@ const AdminDashboard = () => {
       name: menu.name,
       description: menu.description || '',
       category: menu.category || 'general',
-      branch: menu.branch || 'Ateneo',
+      branch: menu.branch || '',
       images: [], // New images to be added
       _id: menu._id, // Store the menu ID for updating
       existingImages: menu.images || [], // Store existing images
@@ -584,7 +584,7 @@ const AdminDashboard = () => {
 
   // Group displays by branch for better organization
   const displaysByBranch = filteredDisplays.reduce((acc, display) => {
-    const branch = display.branch || 'Ateneo'
+    const branch = display.branch || 'ateneo'
     if (!acc[branch]) {
       acc[branch] = []
     }
@@ -600,6 +600,15 @@ const AdminDashboard = () => {
   const imageMenus = menus.filter(menu => menu.menuType === 'image' || !menu.menuType)
 
   const categories = ['all', 'general', 'breakfast', 'lunch', 'dinner', 'drinks']
+  
+  // Branch mapping for display
+  const branchNames = {
+    'ateneo': 'Ateneo de Manila University',
+    'lpudavao': 'Lyceum of the Philippines - Davao',
+    'mapuadavao': 'Mapúa Malayan Colleges Mindanao',
+    'mapuamakati': 'Mapúa University Makati',
+    'dlsulipa': 'De La Salle Lipa'
+  }
 
   if (loading) {
     return (
@@ -772,12 +781,11 @@ const AdminDashboard = () => {
                       className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     >
                       <option value="all">All Branches</option>
-                      <option value="Ateneo">Ateneo</option>
-                      <option value="Lasalle">Lasalle</option>
-                      <option value="PUP">PUP</option>
-                      <option value="UST">UST</option>
-                      <option value="FEU">FEU</option>
-                      <option value="Mapua">Mapua</option>
+                      <option value="ateneo">Ateneo de Manila University</option>
+                      <option value="lpudavao">Lyceum of the Philippines - Davao</option>
+                      <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
+                      <option value="mapuamakati">Mapúa University Makati</option>
+                      <option value="dlsulipa">De La Salle Lipa</option>
                     </select>
                     <button
                       onClick={() => setShowCreateForm(!showCreateForm)}
@@ -821,12 +829,12 @@ const AdminDashboard = () => {
                     onChange={(e) => setDisplayForm({...displayForm, branch: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-base"
                   >
-                    <option value="Ateneo">Ateneo</option>
-                    <option value="Lasalle">Lasalle</option>
-                    <option value="PUP">PUP</option>
-                    <option value="UST">UST</option>
-                    <option value="FEU">FEU</option>
-                    <option value="Mapua">Mapua</option>
+                    <option value="" disabled>Select your University</option>
+                    <option value="ateneo">Ateneo de Manila University</option>
+                    <option value="lpudavao">Lyceum of the Philippines - Davao</option>
+                    <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
+                    <option value="mapuamakati">Mapúa University Makati</option>
+                    <option value="dlsulipa">De La Salle Lipa</option>
                   </select>
                   <div className="flex w-full gap-3 mt-2">
                     <button
@@ -879,7 +887,7 @@ const AdminDashboard = () => {
                           <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center space-x-3">
                               <div className="w-4 h-4 rounded-full bg-blue-500"></div>
-                              <h4 className="text-xl font-semibold text-gray-900">{branch} Branch</h4>
+                              <h4 className="text-xl font-semibold text-gray-900">{branchNames[branch] || branch} Branch</h4>
                               <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
                                 {branchDisplays.length} display{branchDisplays.length !== 1 ? 's' : ''}
                               </span>
@@ -1067,12 +1075,12 @@ const AdminDashboard = () => {
                       onChange={(e) => setMenuForm({...menuForm, branch: e.target.value})}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     >
-                      <option value="Ateneo">Ateneo</option>
-                      <option value="Lasalle">Lasalle</option>
-                      <option value="PUP">PUP</option>
-                      <option value="UST">UST</option>
-                      <option value="FEU">FEU</option>
-                      <option value="Mapua">Mapua</option>
+                      <option value="" disabled>Select your University</option>
+                      <option value="ateneo">Ateneo de Manila University</option>
+                      <option value="lpudavao">Lyceum of the Philippines - Davao</option>
+                      <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
+                      <option value="mapuamakati">Mapúa University Makati</option>
+                      <option value="dlsulipa">De La Salle Lipa</option>
                     </select>
                   </div>
                 </div>
@@ -1231,12 +1239,11 @@ const AdminDashboard = () => {
                       className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     >
                       <option value="all">All Branches</option>
-                      <option value="Ateneo">Ateneo</option>
-                      <option value="Lasalle">Lasalle</option>
-                      <option value="PUP">PUP</option>
-                      <option value="UST">UST</option>
-                      <option value="FEU">FEU</option>
-                      <option value="Mapua">Mapua</option>
+                      <option value="ateneo">Ateneo de Manila University</option>
+                      <option value="lpudavao">Lyceum of the Philippines - Davao</option>
+                      <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
+                      <option value="mapuamakati">Mapúa University Makati</option>
+                      <option value="dlsulipa">De La Salle Lipa</option>
                     </select>
                     <div className="flex border border-gray-300 rounded-md">
                       <button
