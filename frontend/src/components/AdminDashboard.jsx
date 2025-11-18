@@ -276,11 +276,15 @@ const AdminDashboard = () => {
         });
       }
       
-      // If editing, include the menu ID and existing images
+      // If editing, include the menu ID and existing image URLs
       if (menuForm._id) {
         formData.append('_id', menuForm._id);
-        if (menuForm.existingImages && menuForm.existingImages.length > 0) {
-          formData.append('existingImages', JSON.stringify(menuForm.existingImages));
+        // Send only image URLs (not full objects) to minimize data size
+        // The server will fetch full image data from database and match by URL
+        const existingImageUrls = (menuForm.existingImages || []).map(img => img.imageUrl);
+        // Only send if there are images to keep (empty array means clear all images)
+        if (existingImageUrls.length > 0) {
+          formData.append('existingImageUrls', JSON.stringify(existingImageUrls));
         }
       }
       
@@ -327,7 +331,9 @@ const AdminDashboard = () => {
       fetchData()
     } catch (error) {
       console.error('Upload error:', error)
-      setErrorMessage('Failed to upload menu. Please try again.')
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to upload menu. Please try again.'
+      console.error('Error details:', error.response?.data)
+      setErrorMessage(errorMessage)
     } finally {
       setUploading(false)
     }

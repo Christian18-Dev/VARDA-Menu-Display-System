@@ -59,7 +59,7 @@ app.use(cors({
 app.options('*', cors());
 
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' })); // Increased for base64 image URLs in form data
 
 // Note: No longer using local file storage - images are stored as Base64 in MongoDB
 
@@ -579,7 +579,10 @@ app.put('/api/displays/:displayId/menus', authenticateToken, requireAdmin, async
 const uploadBase64Multiple = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit (reduced for Base64 storage)
+    fileSize: 5 * 1024 * 1024, // 5MB limit per file (reduced for Base64 storage)
+    fieldSize: 50 * 1024 * 1024, // 50MB limit for form fields (to handle base64 image URLs)
+    fields: 20, // Maximum number of non-file fields
+    fieldNameSize: 100 // Maximum field name size
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
@@ -680,20 +683,30 @@ app.put('/api/menus/:id', authenticateToken, requireAdmin, (req, res, next) => {
 }, async (req, res) => {
   try {
     console.log('Updating menu with ID:', req.params.id);
-    console.log('Request body:', req.body);
+    console.log('Request body keys:', Object.keys(req.body));
     console.log('Files:', req.files ? req.files.length : 0);
     
-    // Get text fields from form data
-    const { name, description, category, branch, menuItems, design } = req.body;
-    let existingImages = req.body.existingImages;
+    // Fetch the existing menu first to get current images
+    const existingMenu = await Menu.findById(req.params.id);
+    if (!existingMenu) {
+      return res.status(404).json({ error: 'Menu not found' });
+    }
     
-    // Parse existingImages if it's a string
-    if (existingImages && typeof existingImages === 'string') {
-      try {
-        existingImages = JSON.parse(existingImages);
-      } catch (e) {
-        console.error('Error parsing existingImages:', e);
-        return res.status(400).json({ error: 'Invalid existingImages format' });
+    // Get text fields from form data
+    const { name, description, category, branch, menuItems, design, existingImageUrls } = req.body;
+    
+    // Parse existingImageUrls if provided (array of image URLs to keep)
+    let imageUrlsToKeep = [];
+    if (existingImageUrls !== undefined && existingImageUrls !== null) {
+      if (typeof existingImageUrls === 'string') {
+        try {
+          imageUrlsToKeep = JSON.parse(existingImageUrls);
+        } catch (e) {
+          console.error('Error parsing existingImageUrls:', e);
+          return res.status(400).json({ error: 'Invalid existingImageUrls format: ' + e.message });
+        }
+      } else if (Array.isArray(existingImageUrls)) {
+        imageUrlsToKeep = existingImageUrls;
       }
     }
     
@@ -724,7 +737,19 @@ app.put('/api/menus/:id', authenticateToken, requireAdmin, (req, res, next) => {
       }
     }
 
-    // Handle image updates
+    // Handle image updates - match existing images by URL (preserves user's selection/order)
+    let imagesToKeep = [];
+    if (imageUrlsToKeep && imageUrlsToKeep.length > 0 && existingMenu.images) {
+      // Match existing images by imageUrl to preserve user's selection
+      // Create a map for efficient lookup
+      const urlMap = new Map(existingMenu.images.map(img => [img.imageUrl, img]));
+      // Preserve the order from the frontend
+      imagesToKeep = imageUrlsToKeep
+        .map(url => urlMap.get(url))
+        .filter(img => img !== undefined); // Remove any URLs that don't match
+      console.log(`Keeping ${imagesToKeep.length} existing image(s) out of ${existingMenu.images.length}`);
+    }
+    
     if (req.files && req.files.length > 0) {
       console.log(`Processing ${req.files.length} new image(s)`);
       const newImages = req.files.map((file, index) => ({
@@ -732,21 +757,22 @@ app.put('/api/menus/:id', authenticateToken, requireAdmin, (req, res, next) => {
         fileName: file.originalname,
         fileSize: file.size,
         mimeType: file.mimetype,
-        order: index,
+        order: imagesToKeep.length + index,
         createdAt: new Date()
       }));
       
-      // Combine existing images (if any) with new ones
-      if (existingImages && existingImages.length > 0) {
-        console.log(`Combining with ${existingImages.length} existing image(s)`);
-        updateData.images = [...existingImages, ...newImages];
-      } else {
-        console.log('No existing images, using only new images');
-        updateData.images = newImages;
-      }
-    } else if (existingImages && existingImages.length > 0) {
-      console.log(`Updating order of ${existingImages.length} existing image(s)`);
-      updateData.images = existingImages;
+      // Combine existing images with new ones
+      updateData.images = [...imagesToKeep, ...newImages].map((img, index) => ({
+        ...img,
+        order: index
+      }));
+    } else if (imagesToKeep.length > 0) {
+      console.log(`Updating order of ${imagesToKeep.length} existing image(s)`);
+      // Update order to be sequential
+      updateData.images = imagesToKeep.map((img, index) => ({
+        ...img,
+        order: index
+      }));
     } else {
       console.log('No images provided in the update');
       updateData.images = [];
