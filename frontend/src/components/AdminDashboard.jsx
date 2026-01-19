@@ -610,6 +610,7 @@ const AdminDashboard = () => {
   // Branch mapping for display
   const branchNames = {
     'ateneo': 'Ateneo de Manila University',
+    'ateneoblue': 'Ateneo Blue',
     'lpudavao': 'Lyceum of the Philippines - Davao',
     'mapuadavao': 'Mapúa Malayan Colleges Mindanao',
     'mapuamakati': 'Mapúa University Makati',
@@ -788,6 +789,7 @@ const AdminDashboard = () => {
                     >
                       <option value="all">All Branches</option>
                       <option value="ateneo">Ateneo de Manila University</option>
+                      <option value="ateneoblue">Ateneo Blue</option>
                       <option value="lpudavao">Lyceum of the Philippines - Davao</option>
                       <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                       <option value="mapuamakati">Mapúa University Makati</option>
@@ -837,6 +839,7 @@ const AdminDashboard = () => {
                   >
                     <option value="" disabled>Select your University</option>
                     <option value="ateneo">Ateneo de Manila University</option>
+                    <option value="ateneoblue">Ateneo Blue</option>
                     <option value="lpudavao">Lyceum of the Philippines - Davao</option>
                     <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                     <option value="mapuamakati">Mapúa University Makati</option>
@@ -1083,6 +1086,7 @@ const AdminDashboard = () => {
                     >
                       <option value="" disabled>Select your University</option>
                       <option value="ateneo">Ateneo de Manila University</option>
+                      <option value="ateneoblue">Ateneo Blue</option>
                       <option value="lpudavao">Lyceum of the Philippines - Davao</option>
                       <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                       <option value="mapuamakati">Mapúa University Makati</option>
@@ -1246,6 +1250,7 @@ const AdminDashboard = () => {
                     >
                       <option value="all">All Branches</option>
                       <option value="ateneo">Ateneo de Manila University</option>
+                      <option value="ateneoblue">Ateneo Blue</option>
                       <option value="lpudavao">Lyceum of the Philippines - Davao</option>
                       <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                       <option value="mapuamakati">Mapúa University Makati</option>

@@ -447,6 +447,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                 >
                   <option value="" disabled>Select your University</option>
                   <option value="ateneo">Ateneo de Manila University</option>
+                  <option value="ateneoblue">Ateneo Blue</option>
                   <option value="lpudavao">Lyceum of the Philippines - Davao</option>
                   <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                   <option value="mapuamakati">Mapúa University Makati</option>
