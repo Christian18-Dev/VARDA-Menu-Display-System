@@ -612,6 +612,7 @@ const AdminDashboard = () => {
     'ateneo': 'Ateneo de Manila University',
     'ateneoblue': 'Ateneo Blue',
     'lpudavao': 'Lyceum of the Philippines - Davao',
+    'lima': 'Lyceum International Maritime Academy',
     'mapuadavao': 'Mapúa Malayan Colleges Mindanao',
     'mapuamakati': 'Mapúa University Makati',
     'dlsulipa': 'De La Salle Lipa'
@@ -791,6 +792,7 @@ const AdminDashboard = () => {
                       <option value="ateneo">Ateneo de Manila University</option>
                       <option value="ateneoblue">Ateneo Blue</option>
                       <option value="lpudavao">Lyceum of the Philippines - Davao</option>
+                      <option value="lima">Lyceum International Maritime Academy</option>
                       <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                       <option value="mapuamakati">Mapúa University Makati</option>
                       <option value="dlsulipa">De La Salle Lipa</option>
@@ -841,6 +843,7 @@ const AdminDashboard = () => {
                     <option value="ateneo">Ateneo de Manila University</option>
                     <option value="ateneoblue">Ateneo Blue</option>
                     <option value="lpudavao">Lyceum of the Philippines - Davao</option>
+                    <option value="lima">Lyceum International Maritime Academy</option>
                     <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                     <option value="mapuamakati">Mapúa University Makati</option>
                     <option value="dlsulipa">De La Salle Lipa</option>
