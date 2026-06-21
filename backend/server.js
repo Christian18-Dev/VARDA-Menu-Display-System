@@ -515,10 +515,12 @@ app.delete('/api/displays/:displayId', authenticateToken, requireAdmin, async (r
   }
 });
 
-// Get all menus
+// Get all menus (excludes heavy Base64 image data to reduce memory usage)
 app.get('/api/menus', async (req, res) => {
   try {
-    const menus = await Menu.find({ isActive: true });
+    // Exclude 'images.imageUrl' (Base64 blobs) from list responses.
+    // The full image data is fetched only when needed via GET /api/menus/:id
+    const menus = await Menu.find({ isActive: true }).select('-images.imageUrl');
     res.json(menus);
   } catch (error) {
     console.error('Error in /api/menus:', error);
