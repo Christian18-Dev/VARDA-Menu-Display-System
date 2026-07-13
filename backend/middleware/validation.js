@@ -60,7 +60,7 @@ const validateDisplay = [
     .withMessage('Location must be less than 200 characters'),
   body('branch')
     .optional()
-    .isIn(['ateneo', 'lpudavao', 'mapuadavao', 'mapuamakati', 'dlsulipa'])
+    .isIn(['ateneo', 'ateneoblue', 'lpudavao', 'lpubatangas', 'lima', 'mapuadavao', 'mapuamakati', 'dlsulipa'])
     .withMessage('Invalid branch selection'),
   validate
 ];
@@ -83,7 +83,7 @@ const validateMenu = [
     .withMessage('Category must be less than 50 characters'),
   body('branch')
     .optional()
-    .isIn(['ateneo', 'lpudavao', 'mapuadavao', 'mapuamakati', 'dlsulipa'])
+    .isIn(['ateneo', 'ateneoblue', 'lpudavao', 'lpubatangas', 'lima', 'mapuadavao', 'mapuamakati', 'dlsulipa'])
     .withMessage('Invalid branch selection'),
   validate
 ];
