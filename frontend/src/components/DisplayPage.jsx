@@ -573,7 +573,7 @@ const DisplayPage = () => {
                   <img
                     src={currentImage.imageUrl}
                     alt="Menu Display"
-                    className="w-full h-full object-cover absolute"
+                    className="w-full h-full object-contain absolute"
                     style={{
                       animation: 'pushUpAnimation 2s ease-in-out forwards',
                       zIndex: 1
@@ -584,7 +584,7 @@ const DisplayPage = () => {
                     <img
                       src={nextImage.imageUrl}
                       alt="Next Menu Display"
-                      className="w-full h-full object-cover absolute top-0 left-0"
+                      className="w-full h-full object-contain absolute top-0 left-0"
                       style={{
                         animation: 'pushDownAnimation 2s ease-in-out forwards',
                         zIndex: 2
@@ -600,11 +600,11 @@ const DisplayPage = () => {
               <img
                 src={currentImage.imageUrl}
                 alt="Menu Display"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
                 style={{
                   width: '100%',
                   height: '100%',
-                  objectFit: 'cover'
+                  objectFit: 'contain'
                 }}
               />
             )
