@@ -2,24 +2,24 @@ import { useState, useEffect } from 'react'
 import { useSocket } from '../context/SocketContext'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { 
-  getDisplays, 
-  getMenus, 
-  uploadMenu, 
+import {
+  getDisplays,
+  getMenus,
+  uploadMenu,
   updateMenu,
-  deleteMenu, 
+  deleteMenu,
   updateDisplayMenus,
   createDisplay,
-  deleteDisplay 
+  deleteDisplay
 } from '../services/api'
 import { fixMenuImageUrls } from '../utils/imageUtils'
-import { 
-  Upload, 
-  Monitor, 
-  Image, 
-  Trash2, 
-  Plus, 
-  Wifi, 
+import {
+  Upload,
+  Monitor,
+  Image,
+  Trash2,
+  Plus,
+  Wifi,
   WifiOff,
   Settings,
   Eye,
@@ -108,11 +108,11 @@ const AdminDashboard = () => {
   const [successMessage, setSuccessMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [isPaused, setIsPaused] = useState(false)
-  
+
   // Custom menu states
   const [showTextMenuCreator, setShowTextMenuCreator] = useState(false)
   const [editingMenu, setEditingMenu] = useState(null)
-  
+
   // Form states
   const [menuForm, setMenuForm] = useState({
     name: '',
@@ -185,7 +185,7 @@ const AdminDashboard = () => {
         getDisplays(),
         getMenus()
       ])
-      
+
       // Fix image URLs for menus
       const fixedMenus = menusRes.data.map(menu => fixMenuImageUrls(menu))
       const fixedDisplays = displaysRes.data.map(display => ({
@@ -195,10 +195,10 @@ const AdminDashboard = () => {
           menu: cm.menu ? fixMenuImageUrls(cm.menu) : cm.menu
         }))
       }))
-      
+
       setDisplays(fixedDisplays)
       setMenus(fixedMenus)
-      
+
       // Initialize display menus state
       const displayMenusState = {}
       fixedDisplays.forEach(display => {
@@ -266,7 +266,7 @@ const AdminDashboard = () => {
     setUploading(true)
     try {
       const formData = new FormData()
-      
+
       // Add new images
       if (menuForm.images && menuForm.images.length > 0) {
         menuForm.images.forEach((image, index) => {
@@ -275,7 +275,7 @@ const AdminDashboard = () => {
           }
         });
       }
-      
+
       // If editing, include the menu ID and existing image URLs
       if (menuForm._id) {
         formData.append('_id', menuForm._id);
@@ -287,7 +287,7 @@ const AdminDashboard = () => {
           formData.append('existingImageUrls', JSON.stringify(existingImageUrls));
         }
       }
-      
+
       // Add text fields
       formData.append('name', menuForm.name);
       formData.append('description', menuForm.description || '');
@@ -314,13 +314,13 @@ const AdminDashboard = () => {
         await uploadMenu(formData);
         setSuccessMessage('Menu created successfully!');
       }
-      
+
       // Reset form after successful upload/update
-      setMenuForm({ 
-        name: '', 
-        description: '', 
-        category: 'general', 
-        branch: '', 
+      setMenuForm({
+        name: '',
+        description: '',
+        category: 'general',
+        branch: '',
         images: [],
         _id: null,
         existingImages: [],
@@ -356,20 +356,20 @@ const AdminDashboard = () => {
   const handleAssignMenus = async (displayId) => {
     const displayData = displayMenus[displayId]
     if (!displayData) return
-    
+
     try {
       await updateDisplayMenus(displayId, displayData.menuIds, displayData.slideshowInterval, displayData.transitionType)
       if (socket) {
-        socket.emit('update-display', { 
-          displayId, 
-          menuIds: displayData.menuIds, 
+        socket.emit('update-display', {
+          displayId,
+          menuIds: displayData.menuIds,
           slideshowInterval: displayData.slideshowInterval,
           transitionType: displayData.transitionType
         })
       }
-      
+
       // Optimized: Update only the specific display instead of full refresh
-      setDisplays(prevDisplays => 
+      setDisplays(prevDisplays =>
         prevDisplays.map(display => {
           if (display.displayId === displayId) {
             // Update the display with new menu assignments
@@ -377,7 +377,7 @@ const AdminDashboard = () => {
               menu: menus.find(m => m._id === menuId),
               order: index
             })).filter(cm => cm.menu) // Remove any menus that weren't found
-            
+
             return {
               ...display,
               currentMenus: updatedMenus,
@@ -389,7 +389,7 @@ const AdminDashboard = () => {
           return display
         })
       )
-      
+
       setSuccessMessage('Display settings updated!')
     } catch (error) {
       console.error('Assign menus error:', error)
@@ -538,7 +538,7 @@ const AdminDashboard = () => {
     setShowMenuModal(true);
   };
 
-    const handlePauseAllDisplays = () => {
+  const handlePauseAllDisplays = () => {
     if (socket && isConnected) {
       socket.emit('pause-displays')
       setIsPaused(true)
@@ -555,7 +555,7 @@ const AdminDashboard = () => {
     if (socket && isConnected) {
       socket.emit('resume-displays', { delay: numericDelay })
       setIsPaused(false)
-      setSuccessMessage(`Resuming all displays in ${Math.ceil(numericDelay/1000)}s`)
+      setSuccessMessage(`Resuming all displays in ${Math.ceil(numericDelay / 1000)}s`)
       setTimeout(() => setSuccessMessage(''), 4000)
     } else {
       setErrorMessage('Not connected to server')
@@ -571,12 +571,12 @@ const AdminDashboard = () => {
     }
   }
 
-  
+
 
   // Filter menus based on search and category
   const filteredMenus = menus.filter(menu => {
     const matchesSearch = menu.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         menu.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      menu.description?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategory === 'all' || menu.category === selectedCategory
     const matchesBranch = selectedBranch === 'all' || menu.branch === selectedBranch
     return matchesSearch && matchesCategory && matchesBranch
@@ -606,7 +606,7 @@ const AdminDashboard = () => {
   const imageMenus = menus.filter(menu => menu.menuType === 'image' || !menu.menuType)
 
   const categories = ['all', 'general', 'breakfast', 'lunch', 'dinner', 'drinks']
-  
+
   // Branch mapping for display
   const branchNames = {
     'ateneo': 'Ateneo de Manila University',
@@ -616,7 +616,8 @@ const AdminDashboard = () => {
     'lima': 'Lyceum International Maritime Academy',
     'mapuadavao': 'Mapúa Malayan Colleges Mindanao',
     'mapuamakati': 'Mapúa University Makati',
-    'dlsulipa': 'De La Salle Lipa'
+    'dlsulipa': 'De La Salle Lipa',
+    'stjude': 'St. Jude'
   }
 
   if (loading) {
@@ -661,19 +662,18 @@ const AdminDashboard = () => {
               <button
                 onClick={handleTogglePausePlay}
                 disabled={!isConnected}
-                className={`flex items-center space-x-2 px-3 py-2 text-sm rounded-md transition-colors ${
-                  isConnected
-                    ? isPaused
-                      ? 'bg-green-100 hover:bg-green-200 text-green-700'
-                      : 'bg-yellow-100 hover:bg-yellow-200 text-yellow-700'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
+                className={`flex items-center space-x-2 px-3 py-2 text-sm rounded-md transition-colors ${isConnected
+                  ? isPaused
+                    ? 'bg-green-100 hover:bg-green-200 text-green-700'
+                    : 'bg-yellow-100 hover:bg-yellow-200 text-yellow-700'
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  }`}
                 title={isPaused ? "Resume all connected displays" : "Pause all connected displays"}
               >
                 {isPaused ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3" /></svg>
                 ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 4H6v16h4zM18 4h-4v16h4z"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 4H6v16h4zM18 4h-4v16h4z" /></svg>
                 )}
                 <span>{isPaused ? 'Play' : 'Pause'}</span>
                 {isConnected && (
@@ -693,7 +693,7 @@ const AdminDashboard = () => {
                   </div>
                 )}
               </div>
-              
+
               {/* User Menu */}
               <div className="flex items-center space-x-2">
                 <div className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700">
@@ -741,33 +741,30 @@ const AdminDashboard = () => {
           <nav className="-mb-px flex space-x-8 bg-white/40 backdrop-blur-lg rounded-2xl shadow-lg p-2 border border-white/30">
             <button
               onClick={() => setActiveTab('displays')}
-              className={`py-3 px-6 rounded-xl font-semibold text-base transition-all duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 border-2 ${
-                activeTab === 'displays'
-                  ? 'bg-gradient-to-r from-indigo-400 via-blue-300 to-pink-200 text-indigo-900 border-indigo-400 shadow-lg'
-                  : 'bg-white/60 text-gray-600 border-transparent hover:bg-indigo-50 hover:text-indigo-700'
-              }`}
+              className={`py-3 px-6 rounded-xl font-semibold text-base transition-all duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 border-2 ${activeTab === 'displays'
+                ? 'bg-gradient-to-r from-indigo-400 via-blue-300 to-pink-200 text-indigo-900 border-indigo-400 shadow-lg'
+                : 'bg-white/60 text-gray-600 border-transparent hover:bg-indigo-50 hover:text-indigo-700'
+                }`}
             >
               <Monitor className="inline h-4 w-4 mr-2" />
               Displays ({filteredDisplays.length})
             </button>
             <button
               onClick={() => setActiveTab('menus')}
-              className={`py-3 px-6 rounded-xl font-semibold text-base transition-all duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 border-2 ${
-                activeTab === 'menus'
-                  ? 'bg-gradient-to-r from-indigo-400 via-blue-300 to-pink-200 text-indigo-900 border-indigo-400 shadow-lg'
-                  : 'bg-white/60 text-gray-600 border-transparent hover:bg-indigo-50 hover:text-indigo-700'
-              }`}
+              className={`py-3 px-6 rounded-xl font-semibold text-base transition-all duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 border-2 ${activeTab === 'menus'
+                ? 'bg-gradient-to-r from-indigo-400 via-blue-300 to-pink-200 text-indigo-900 border-indigo-400 shadow-lg'
+                : 'bg-white/60 text-gray-600 border-transparent hover:bg-indigo-50 hover:text-indigo-700'
+                }`}
             >
               <Image className="inline h-4 w-4 mr-2" />
               Menus ({menus.length})
             </button>
             <button
               onClick={() => setActiveTab('custom-menus')}
-              className={`py-3 px-6 rounded-xl font-semibold text-base transition-all duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 border-2 ${
-                activeTab === 'custom-menus'
-                  ? 'bg-gradient-to-r from-indigo-400 via-blue-300 to-pink-200 text-indigo-900 border-indigo-400 shadow-lg'
-                  : 'bg-white/60 text-gray-600 border-transparent hover:bg-indigo-50 hover:text-indigo-700'
-              }`}
+              className={`py-3 px-6 rounded-xl font-semibold text-base transition-all duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 border-2 ${activeTab === 'custom-menus'
+                ? 'bg-gradient-to-r from-indigo-400 via-blue-300 to-pink-200 text-indigo-900 border-indigo-400 shadow-lg'
+                : 'bg-white/60 text-gray-600 border-transparent hover:bg-indigo-50 hover:text-indigo-700'
+                }`}
             >
               <Type className="inline h-4 w-4 mr-2" />
               Custom Menu
@@ -785,7 +782,7 @@ const AdminDashboard = () => {
                   <h3 className="text-lg font-medium text-gray-900">Display Management</h3>
                   <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
                     <select
-                      value={selectedDisplayBranch} 
+                      value={selectedDisplayBranch}
                       onChange={(e) => setSelectedDisplayBranch(e.target.value)}
                       className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     >
@@ -798,6 +795,7 @@ const AdminDashboard = () => {
                       <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                       <option value="mapuamakati">Mapúa University Makati</option>
                       <option value="dlsulipa">De La Salle Lipa</option>
+                      <option value="stjude">St. Jude</option>
                     </select>
                     <button
                       onClick={() => setShowCreateForm(!showCreateForm)}
@@ -809,14 +807,14 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               </div>
-              
+
               <GlassModal open={showCreateForm} onClose={() => setShowCreateForm(false)} title="Create New Display">
                 <form onSubmit={handleCreateDisplay} className="flex flex-col gap-5 items-center">
                   <input
                     type="text"
                     placeholder="Display Name"
                     value={displayForm.name}
-                    onChange={(e) => setDisplayForm({...displayForm, name: e.target.value})}
+                    onChange={(e) => setDisplayForm({ ...displayForm, name: e.target.value })}
                     className="w-full border border-gray-300 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-base"
                     required
                   />
@@ -824,7 +822,7 @@ const AdminDashboard = () => {
                     type="text"
                     placeholder="Display ID (unique)"
                     value={displayForm.displayId}
-                    onChange={(e) => setDisplayForm({...displayForm, displayId: e.target.value})}
+                    onChange={(e) => setDisplayForm({ ...displayForm, displayId: e.target.value })}
                     className="w-full border border-gray-300 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-base"
                     required
                   />
@@ -832,13 +830,13 @@ const AdminDashboard = () => {
                     type="text"
                     placeholder="Location"
                     value={displayForm.location}
-                    onChange={(e) => setDisplayForm({...displayForm, location: e.target.value})}
+                    onChange={(e) => setDisplayForm({ ...displayForm, location: e.target.value })}
                     className="w-full border border-gray-300 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-base"
                     required
                   />
                   <select
                     value={displayForm.branch}
-                    onChange={(e) => setDisplayForm({...displayForm, branch: e.target.value})}
+                    onChange={(e) => setDisplayForm({ ...displayForm, branch: e.target.value })}
                     className="w-full border border-gray-300 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-base"
                   >
                     <option value="" disabled>Select your University</option>
@@ -850,6 +848,7 @@ const AdminDashboard = () => {
                     <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                     <option value="mapuamakati">Mapúa University Makati</option>
                     <option value="dlsulipa">De La Salle Lipa</option>
+                    <option value="stjude">St. Jude</option>
                   </select>
                   <div className="flex w-full gap-3 mt-2">
                     <button
@@ -871,160 +870,160 @@ const AdminDashboard = () => {
               </GlassModal>
             </div>
 
-                          {/* Displays List - Card Layout */}
-              <div className="bg-white/40 backdrop-blur-lg rounded-3xl shadow-xl border border-white/30">
-                <div className="px-6 py-4 border-b border-white/30">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-                    <h3 className="text-lg font-medium text-gray-900">Display Screens</h3>
-                    <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <Monitor className="h-4 w-4" />
-                      <span>Total: {filteredDisplays.length} displays across {branches.length} branches</span>
-                    </div>
+            {/* Displays List - Card Layout */}
+            <div className="bg-white/40 backdrop-blur-lg rounded-3xl shadow-xl border border-white/30">
+              <div className="px-6 py-4 border-b border-white/30">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                  <h3 className="text-lg font-medium text-gray-900">Display Screens</h3>
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <Monitor className="h-4 w-4" />
+                    <span>Total: {filteredDisplays.length} displays across {branches.length} branches</span>
                   </div>
                 </div>
-                
-                {filteredDisplays.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">
-                    <Monitor className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>No displays found.</p>
-                    <p className="text-sm">Create your first display to get started.</p>
-                  </div>
-                ) : (
-                  <div className="p-6">
-                    {/* Branch Sections */}
-                    {branches.map((branch) => {
-                      const branchDisplays = displaysByBranch[branch]
-                      const isBranchExpanded = expandedBranches.has(branch)
-                      
-                      return (
-                        <div key={branch} className="mb-8">
-                          {/* Branch Header */}
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-4 h-4 rounded-full bg-blue-500"></div>
-                              <h4 className="text-xl font-semibold text-gray-900">{branchNames[branch] || branch} Branch</h4>
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                                {branchDisplays.length} display{branchDisplays.length !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                            <button
-                              onClick={() => {
-                                const newExpandedBranches = new Set(expandedBranches);
-                                if (isBranchExpanded) {
-                                  newExpandedBranches.delete(branch);
-                                } else {
-                                  newExpandedBranches.add(branch);
-                                }
-                                setExpandedBranches(newExpandedBranches);
-                              }}
-                              className="flex items-center space-x-2 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                            >
-                              <span>{isBranchExpanded ? 'Hide' : 'Show'} Displays</span>
-                              <span className={`transition-transform duration-200 ${isBranchExpanded ? 'rotate-90' : ''}`}>
-                                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
-                              </span>
-                            </button>
+              </div>
+
+              {filteredDisplays.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <Monitor className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>No displays found.</p>
+                  <p className="text-sm">Create your first display to get started.</p>
+                </div>
+              ) : (
+                <div className="p-6">
+                  {/* Branch Sections */}
+                  {branches.map((branch) => {
+                    const branchDisplays = displaysByBranch[branch]
+                    const isBranchExpanded = expandedBranches.has(branch)
+
+                    return (
+                      <div key={branch} className="mb-8">
+                        {/* Branch Header */}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-4 h-4 rounded-full bg-blue-500"></div>
+                            <h4 className="text-xl font-semibold text-gray-900">{branchNames[branch] || branch} Branch</h4>
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                              {branchDisplays.length} display{branchDisplays.length !== 1 ? 's' : ''}
+                            </span>
                           </div>
-                          
-                          {/* Display Cards Grid */}
-                          {isBranchExpanded && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                              {branchDisplays.map((display) => {
-                                // Use displayId as the unique identifier since it's guaranteed to exist
-                                const displayKey = display.displayId;
-                                const isOnline = new Date(display.lastSeen) > new Date(Date.now() - 5 * 60 * 1000);
-                                
-                                return (
-                                  <div key={displayKey} className="group">
-                                    {/* Display Card */}
-                                    <div className="relative bg-white rounded-2xl shadow-lg border-2 border-gray-200 hover:border-primary-300 transition-all duration-300 hover:shadow-xl hover:scale-105">
-                                      {/* Status Indicator */}
-                                      <div className={`absolute top-4 right-4 w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} shadow-lg`}></div>
-                                      
-                                      {/* Card Header */}
-                                      <div className="p-6 pb-4">
-                                        <div className="flex items-start justify-between mb-3">
-                                          <div className="flex-1">
-                                            <h5 className="text-lg font-semibold text-gray-900 mb-1">{display.name}</h5>
-                                            <p className="text-sm text-gray-600">{display.location}</p>
-                                          </div>
-                                          <div className="flex items-center space-x-2">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${isOnline ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                              {isOnline ? 'Online' : 'Offline'}
-                                            </span>
-                                          </div>
+                          <button
+                            onClick={() => {
+                              const newExpandedBranches = new Set(expandedBranches);
+                              if (isBranchExpanded) {
+                                newExpandedBranches.delete(branch);
+                              } else {
+                                newExpandedBranches.add(branch);
+                              }
+                              setExpandedBranches(newExpandedBranches);
+                            }}
+                            className="flex items-center space-x-2 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                          >
+                            <span>{isBranchExpanded ? 'Hide' : 'Show'} Displays</span>
+                            <span className={`transition-transform duration-200 ${isBranchExpanded ? 'rotate-90' : ''}`}>
+                              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" /></svg>
+                            </span>
+                          </button>
+                        </div>
+
+                        {/* Display Cards Grid */}
+                        {isBranchExpanded && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {branchDisplays.map((display) => {
+                              // Use displayId as the unique identifier since it's guaranteed to exist
+                              const displayKey = display.displayId;
+                              const isOnline = new Date(display.lastSeen) > new Date(Date.now() - 5 * 60 * 1000);
+
+                              return (
+                                <div key={displayKey} className="group">
+                                  {/* Display Card */}
+                                  <div className="relative bg-white rounded-2xl shadow-lg border-2 border-gray-200 hover:border-primary-300 transition-all duration-300 hover:shadow-xl hover:scale-105">
+                                    {/* Status Indicator */}
+                                    <div className={`absolute top-4 right-4 w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} shadow-lg`}></div>
+
+                                    {/* Card Header */}
+                                    <div className="p-6 pb-4">
+                                      <div className="flex items-start justify-between mb-3">
+                                        <div className="flex-1">
+                                          <h5 className="text-lg font-semibold text-gray-900 mb-1">{display.name}</h5>
+                                          <p className="text-sm text-gray-600">{display.location}</p>
                                         </div>
-                                        
-                                        {/* Card Content */}
-                                        <div className="space-y-3">
-                                          <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-600">Display ID:</span>
-                                            <span className="font-mono text-gray-900">{display.displayId}</span>
-                                          </div>
-                                          <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-600">Menus:</span>
-                                            <span className="font-medium text-blue-600">
-                                              {display.currentMenus?.length || 0} assigned
-                                            </span>
-                                          </div>
-                                          <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-600">Last Seen:</span>
-                                            <span className="text-gray-900">
-                                              {new Date(display.lastSeen).toLocaleDateString()}
-                                            </span>
-                                          </div>
+                                        <div className="flex items-center space-x-2">
+                                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${isOnline ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                            {isOnline ? 'Online' : 'Offline'}
+                                          </span>
                                         </div>
                                       </div>
-                                      
-                                      {/* Card Actions */}
-                                      <div className="px-6 pb-6">
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center space-x-2">
-                                            <a
-                                              href={getDisplayUrl(display.displayId)}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="flex items-center space-x-1 px-3 py-2 text-sm bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100 transition-colors"
-                                            >
-                                              <Eye className="h-4 w-4" />
-                                              <span>View</span>
-                                            </a>
-                                            <button
-                                              onClick={() => handleOpenDisplaySettings(display)}
-                                              className="flex items-center space-x-1 px-3 py-2 text-sm bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-                                            >
-                                              <Settings className="h-4 w-4" />
-                                              <span>Settings</span>
-                                            </button>
-                                          </div>
-                                          <button
-                                            onClick={() => handleDeleteDisplay(display.displayId, display.name)}
-                                            className="flex items-center space-x-1 px-3 py-2 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
-                                            title="Delete display"
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                            <span>Delete</span>
-                                          </button>
+
+                                      {/* Card Content */}
+                                      <div className="space-y-3">
+                                        <div className="flex items-center justify-between text-sm">
+                                          <span className="text-gray-600">Display ID:</span>
+                                          <span className="font-mono text-gray-900">{display.displayId}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-sm">
+                                          <span className="text-gray-600">Menus:</span>
+                                          <span className="font-medium text-blue-600">
+                                            {display.currentMenus?.length || 0} assigned
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-sm">
+                                          <span className="text-gray-600">Last Seen:</span>
+                                          <span className="text-gray-900">
+                                            {new Date(display.lastSeen).toLocaleDateString()}
+                                          </span>
                                         </div>
                                       </div>
                                     </div>
+
+                                    {/* Card Actions */}
+                                    <div className="px-6 pb-6">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                          <a
+                                            href={getDisplayUrl(display.displayId)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center space-x-1 px-3 py-2 text-sm bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100 transition-colors"
+                                          >
+                                            <Eye className="h-4 w-4" />
+                                            <span>View</span>
+                                          </a>
+                                          <button
+                                            onClick={() => handleOpenDisplaySettings(display)}
+                                            className="flex items-center space-x-1 px-3 py-2 text-sm bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                                          >
+                                            <Settings className="h-4 w-4" />
+                                            <span>Settings</span>
+                                          </button>
+                                        </div>
+                                        <button
+                                          onClick={() => handleDeleteDisplay(display.displayId, display.name)}
+                                          className="flex items-center space-x-1 px-3 py-2 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
+                                          title="Delete display"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                          <span>Delete</span>
+                                        </button>
+                                      </div>
+                                    </div>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* Menu Modal */}
-        <GlassModal 
-          open={showMenuModal} 
+        <GlassModal
+          open={showMenuModal}
           onClose={() => setShowMenuModal(false)}
           title={menuForm.menuType === 'custom' ? (menuForm._id ? 'Edit Text Menu' : 'Create Text Menu') : (menuForm._id ? 'Edit Image Menu' : 'Create Image Menu')}
         >
@@ -1045,7 +1044,7 @@ const AdminDashboard = () => {
                     placeholder="e.g., Lunch Specials"
                   />
                 </div>
-                
+
                 <div>
                   <label htmlFor="menu-description" className="block text-sm font-medium text-gray-700">
                     Description
@@ -1059,7 +1058,7 @@ const AdminDashboard = () => {
                     placeholder="Brief description of the menu (optional)"
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="menu-category" className="block text-sm font-medium text-gray-700">
@@ -1068,7 +1067,7 @@ const AdminDashboard = () => {
                     <select
                       id="menu-category"
                       value={menuForm.category}
-                      onChange={(e) => setMenuForm({...menuForm, category: e.target.value})}
+                      onChange={(e) => setMenuForm({ ...menuForm, category: e.target.value })}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     >
                       <option value="general">General</option>
@@ -1079,7 +1078,7 @@ const AdminDashboard = () => {
                     </select>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1087,7 +1086,7 @@ const AdminDashboard = () => {
                     </label>
                     <select
                       value={menuForm.branch}
-                      onChange={(e) => setMenuForm({...menuForm, branch: e.target.value})}
+                      onChange={(e) => setMenuForm({ ...menuForm, branch: e.target.value })}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     >
                       <option value="" disabled>Select your University</option>
@@ -1098,6 +1097,7 @@ const AdminDashboard = () => {
                       <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                       <option value="mapuamakati">Mapúa University Makati</option>
                       <option value="dlsulipa">De La Salle Lipa</option>
+                      <option value="stjude">St. Jude</option>
                     </select>
                   </div>
                 </div>
@@ -1137,9 +1137,9 @@ const AdminDashboard = () => {
                     <div className="grid grid-cols-3 gap-2">
                       {menuForm.existingImages.map((img, idx) => (
                         <div key={idx} className="relative group">
-                          <img 
-                            src={img.imageUrl} 
-                            alt={`Menu ${idx + 1}`} 
+                          <img
+                            src={img.imageUrl}
+                            alt={`Menu ${idx + 1}`}
                             className="h-24 w-full object-cover rounded-md"
                           />
                           <button
@@ -1191,8 +1191,8 @@ const AdminDashboard = () => {
               </form>
             ) : (
               <div className="space-y-4">
-                <TextMenuCreator 
-                  menu={menuForm._id ? menuForm : null} 
+                <TextMenuCreator
+                  menu={menuForm._id ? menuForm : null}
                   onSave={() => {
                     setShowMenuModal(false);
                     setSuccessMessage(menuForm._id ? 'Menu updated successfully!' : 'Menu created successfully!');
@@ -1226,7 +1226,7 @@ const AdminDashboard = () => {
               <div className="px-6 py-4 border-b border-gray-200">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
                   <h3 className="text-lg font-medium text-gray-900">Uploaded Menus</h3>
-                  
+
                   {/* Search and Filter */}
                   <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
                     <div className="relative">
@@ -1263,6 +1263,7 @@ const AdminDashboard = () => {
                       <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                       <option value="mapuamakati">Mapúa University Makati</option>
                       <option value="dlsulipa">De La Salle Lipa</option>
+                      <option value="stjude">St. Jude</option>
                     </select>
                     <div className="flex border border-gray-300 rounded-md">
                       <button
@@ -1281,7 +1282,7 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="p-6">
                 {filteredMenus.length === 0 ? (
                   <div className="text-center py-12 text-gray-500">
@@ -1290,14 +1291,13 @@ const AdminDashboard = () => {
                     <p className="text-sm">Upload your first menu to get started.</p>
                   </div>
                 ) : (
-                  <div className={viewMode === 'grid' 
-                    ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" 
+                  <div className={viewMode === 'grid'
+                    ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
                     : "space-y-4"
                   }>
                     {filteredMenus.map((menu) => (
-                      <div key={menu._id} className={`border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow ${
-                        viewMode === 'list' ? 'flex' : ''
-                      }`}>
+                      <div key={menu._id} className={`border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow ${viewMode === 'list' ? 'flex' : ''
+                        }`}>
                         {menu.images && menu.images.length > 0 && (
                           <div className={`relative ${viewMode === 'list' ? 'w-48 flex-shrink-0' : ''}`}>
                             <img
@@ -1316,11 +1316,10 @@ const AdminDashboard = () => {
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center space-x-2">
                               <h4 className="text-lg font-medium text-gray-900">{menu.name}</h4>
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                menu.menuType === 'custom' 
-                                  ? 'bg-blue-100 text-blue-800' 
-                                  : 'bg-green-100 text-green-800'
-                              }`}>
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${menu.menuType === 'custom'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-green-100 text-green-800'
+                                }`}>
                                 {menu.menuType === 'custom' ? 'Custom' : 'Image'}
                               </span>
                             </div>
@@ -1361,8 +1360,8 @@ const AdminDashboard = () => {
                               <span className="capitalize">{menu.branch || 'main'}</span>
                             </div>
                             <span>
-                              {menu.menuType === 'custom' 
-                                ? `${menu.menuItems?.length || 0} items` 
+                              {menu.menuType === 'custom'
+                                ? `${menu.menuItems?.length || 0} items`
                                 : `${menu.images?.length || 0} images`
                               }
                             </span>
@@ -1385,7 +1384,7 @@ const AdminDashboard = () => {
           <div className="space-y-6">
             {/* Custom Menu Creator Section */}
             {showTextMenuCreator ? (
-              <TextMenuCreator 
+              <TextMenuCreator
                 menu={editingMenu}
                 onSave={handleTextMenuSave}
                 onCancel={handleTextMenuCancel}
@@ -1454,7 +1453,7 @@ const AdminDashboard = () => {
                             <div className="mt-2 text-xs text-gray-400">
                               {new Date(menu.createdAt).toLocaleDateString()}
                             </div>
-                            
+
                             {/* Preview of menu items */}
                             {menu.menuItems && menu.menuItems.length > 0 && (
                               <div className="mt-3 pt-3 border-t border-gray-100">
@@ -1497,8 +1496,8 @@ const AdminDashboard = () => {
       />
 
       {/* Display Settings Modal */}
-      <GlassModal 
-        open={showDisplaySettingsModal} 
+      <GlassModal
+        open={showDisplaySettingsModal}
         onClose={handleCloseDisplaySettings}
         title={selectedDisplay ? `Display Settings - ${selectedDisplay.name}` : 'Display Settings'}
       >

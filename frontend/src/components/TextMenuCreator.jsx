@@ -1,10 +1,10 @@
 import { useState, useRef } from 'react'
-import { 
-  Plus, 
-  Trash2, 
-  Upload, 
-  Palette, 
-  Type, 
+import {
+  Plus,
+  Trash2,
+  Upload,
+  Palette,
+  Type,
   Save,
   Edit3,
   Image as ImageIcon,
@@ -36,7 +36,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
       backgroundImage: ''
     }
   })
-  
+
   const [loading, setLoading] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(null)
   const [uploadingBackground, setUploadingBackground] = useState(false)
@@ -160,12 +160,12 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
     if (!rect) return
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-    
+
     // Calculate maximum allowed positions to keep elements within bounds
     // Use conservative estimates for different element types
     let maxElementWidth = 150 // pixels - conservative estimate
     let maxElementHeight = 80 // pixels - conservative estimate
-    
+
     // Adjust based on element type for better boundaries
     if (draggingKey === 'title') {
       maxElementWidth = 300
@@ -186,10 +186,10 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
       maxElementWidth = 150
       maxElementHeight = 40
     }
-    
+
     const maxLeftPct = Math.max(0, 100 - (maxElementWidth / rect.width) * 100)
     const maxTopPct = Math.max(0, 100 - (maxElementHeight / rect.height) * 100)
-    
+
     const leftPct = clamp((x / rect.width) * 100, 0, maxLeftPct)
     const topPct = clamp((y / rect.height) * 100, 0, maxTopPct)
     setPosForKey(draggingKey, { left: leftPct, top: topPct })
@@ -224,7 +224,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
   const handleMenuItemChange = (index, field, value) => {
     setFormData(prev => ({
       ...prev,
-      menuItems: prev.menuItems.map((item, i) => 
+      menuItems: prev.menuItems.map((item, i) =>
         i === index ? { ...item, [field]: value } : item
       )
     }))
@@ -233,19 +233,19 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
   const handlePriceChange = (index, value) => {
     // Remove any existing peso symbol and non-numeric characters except decimal point
     let cleanValue = value.replace(/[₱\s,]/g, '')
-    
+
     // Only allow numbers and decimal point
     cleanValue = cleanValue.replace(/[^0-9.]/g, '')
-    
+
     // Ensure only one decimal point
     const parts = cleanValue.split('.')
     if (parts.length > 2) {
       cleanValue = parts[0] + '.' + parts.slice(1).join('')
     }
-    
+
     // Add peso symbol if there's a value
     const formattedValue = cleanValue ? `₱${cleanValue}` : ''
-    
+
     handleMenuItemChange(index, 'price', formattedValue)
   }
 
@@ -256,10 +256,10 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
     try {
       const formData = new FormData()
       formData.append('itemImage', file)
-      
+
       const response = await uploadItemImage(formData)
       const imageData = response.data
-      
+
       handleMenuItemChange(index, 'imageUrl', imageData.imageUrl)
       handleMenuItemChange(index, 'fileName', imageData.fileName)
       handleMenuItemChange(index, 'fileSize', imageData.fileSize)
@@ -279,10 +279,10 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
     try {
       const formData = new FormData()
       formData.append('itemImage', file)
-      
+
       const response = await uploadItemImage(formData)
       const imageData = response.data
-      
+
       handleDesignChange('backgroundImage', imageData.imageUrl)
     } catch (error) {
       console.error('Background image upload error:', error)
@@ -304,7 +304,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (!formData.name.trim()) {
       alert('Please enter a menu name')
       return
@@ -356,7 +356,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
   // Allow saving directly from full-screen design mode
   const saveFromDesign = async () => {
     try {
-      await handleSubmit({ preventDefault: () => {} })
+      await handleSubmit({ preventDefault: () => { } })
     } catch (err) {
       // no-op: handleSubmit already shows error
     }
@@ -412,7 +412,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   required
                 />
@@ -423,7 +423,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                 </label>
                 <select
                   value={formData.category}
-                  onChange={(e) => setFormData({...formData, category: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="general">General</option>
@@ -442,7 +442,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                 </label>
                 <select
                   value={formData.branch}
-                  onChange={(e) => setFormData({...formData, branch: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="" disabled>Select your University</option>
@@ -453,6 +453,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                   <option value="mapuadavao">Mapúa Malayan Colleges Mindanao</option>
                   <option value="mapuamakati">Mapúa University Makati</option>
                   <option value="dlsulipa">De La Salle Lipa</option>
+                  <option value="stjude">St. Jude</option>
                 </select>
               </div>
             </div>
@@ -463,7 +464,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
               </label>
               <textarea
                 value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 rows="3"
               />
@@ -621,7 +622,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                 {formData.name || 'Untitled Menu'}
               </span>
             </div>
-            
+
             <div className="flex items-center space-x-3">
               <button
                 onClick={saveFromDesign}
@@ -633,11 +634,10 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
               </button>
               <button
                 onClick={() => setIsDragMode(!isDragMode)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
-                  isDragMode 
-                    ? 'bg-primary-600 text-white' 
+                className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${isDragMode
+                    ? 'bg-primary-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                  }`}
                 title="Toggle Drag Mode"
               >
                 <Edit3 className="h-4 w-4" />
@@ -645,16 +645,15 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
               </button>
               <button
                 onClick={() => setShowDesignSettings(!showDesignSettings)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
-                  showDesignSettings 
-                    ? 'bg-primary-600 text-white' 
+                className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${showDesignSettings
+                    ? 'bg-primary-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                  }`}
               >
                 <Settings className="h-4 w-4" />
                 <span>Design Settings</span>
               </button>
-              
+
               <button
                 onClick={() => setShowFullScreenDesign(false)}
                 className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
@@ -666,7 +665,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
           </div>
 
           {/* Main Content Area */}
-          <div 
+          <div
             className="flex-1 flex relative min-h-0"
             onMouseMove={onPreviewMouseMove}
             onMouseUp={() => { stopDragging(); stopResizing(); }}
@@ -803,7 +802,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                     {/* Font Sizes */}
                     <div className="space-y-4">
                       <h4 className="text-sm font-medium text-gray-700">Font Sizes</h4>
-                      
+
                       {formData.design.showMenuName && (
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-2">
@@ -873,7 +872,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
 
             {/* Preview Area */}
             <div className="flex-1 flex items-center justify-center p-4 bg-gray-100">
-              <div 
+              <div
                 className="rounded-lg shadow-2xl relative overflow-hidden"
                 ref={previewRef}
                 style={{
@@ -891,7 +890,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                 }}
               >
                 {/* Background overlay removed for cleaner preview */}
-                
+
                 <div className="relative h-full p-12" style={{ zIndex: 2 }}>
                   {formData.design.showMenuName && (
                     <div
@@ -910,7 +909,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                         }
                       }}
                     >
-                      <h1 
+                      <h1
                         className="font-bold"
                         style={{
                           color: formData.design.titleColor,
@@ -1069,7 +1068,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                               }
                             }}
                           >
-                            <h3 
+                            <h3
                               className="font-semibold"
                               style={{ fontSize: formData.design.itemFontSize }}
                             >
@@ -1115,7 +1114,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                                 }
                               }}
                             >
-                              <span 
+                              <span
                                 className="font-bold"
                                 style={{
                                   color: formData.design.priceColor,
