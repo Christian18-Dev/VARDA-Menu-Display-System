@@ -100,67 +100,62 @@ const User = require('./models/User');
 const { authenticateToken, requireAdmin } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 
-// Utility function to handle image URLs (now supports both Base64 and external URLs)
+// Utility function to convert heavy Base64 image strings into lightweight image endpoint URLs
+// This prevents giant Base64 strings from polluting Node JS memory and crashing V8 Heap
 const fixImageUrls = (data) => {
   try {
-    // Handle null/undefined data
-    if (!data) {
-      return data;
+    if (!data) return data;
+
+    const doc = data.toObject ? data.toObject() : data;
+
+    if (Array.isArray(doc)) {
+      return doc.map(item => fixImageUrls(item));
     }
-    
-    if (Array.isArray(data)) {
-      return data.map(item => fixImageUrls(item));
-    }
-    
-    if (data && typeof data === 'object') {
-      const fixed = { ...data };
-      
-      // Handle menu images (Base64 or external URLs)
+
+    if (doc && typeof doc === 'object') {
+      const fixed = { ...doc };
+      const menuId = fixed._id ? fixed._id.toString() : null;
+
+      // Handle menu images (Base64 URLs converted to lightweight endpoint URLs)
       if (fixed.images && Array.isArray(fixed.images)) {
-        fixed.images = fixed.images.map(image => {
+        fixed.images = fixed.images.map((image, idx) => {
           if (!image || typeof image !== 'object') return image;
-          return {
-            ...image,
-            // Keep Base64 URLs as-is, only fix relative URLs if they exist
-            imageUrl: image.imageUrl && typeof image.imageUrl === 'string' && 
-                     !image.imageUrl.startsWith('data:') && 
-                     !image.imageUrl.startsWith('http') 
-              ? `${process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com'}${image.imageUrl}` 
-              : image.imageUrl
-          };
+          let imageUrl = image.imageUrl;
+          if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('data:')) {
+            imageUrl = menuId ? `/api/menus/${menuId}/images/${idx}` : imageUrl;
+          }
+          return { ...image, imageUrl };
         });
       }
-      
+
       // Handle menu items with images
       if (fixed.menuItems && Array.isArray(fixed.menuItems)) {
-        fixed.menuItems = fixed.menuItems.map(item => {
+        fixed.menuItems = fixed.menuItems.map((item, idx) => {
           if (!item || typeof item !== 'object') return item;
-          return {
-            ...item,
-            imageUrl: item.imageUrl && typeof item.imageUrl === 'string' && 
-                     !item.imageUrl.startsWith('data:') && 
-                     !item.imageUrl.startsWith('http') 
-              ? `${process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com'}${item.imageUrl}` 
-              : item.imageUrl
-          };
+          let imageUrl = item.imageUrl;
+          if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('data:')) {
+            imageUrl = menuId ? `/api/menus/${menuId}/images/item-${idx}` : imageUrl;
+          }
+          return { ...item, imageUrl };
         });
       }
-      
+
       // Handle background image
-      if (fixed.design && fixed.design.backgroundImage && 
-          typeof fixed.design.backgroundImage === 'string' && 
-          !fixed.design.backgroundImage.startsWith('data:') && 
-          !fixed.design.backgroundImage.startsWith('http')) {
-        fixed.design.backgroundImage = `${process.env.BACKEND_URL || 'https://varda-menu-display-system.onrender.com'}${fixed.design.backgroundImage}`;
+      if (fixed.design && fixed.design.backgroundImage &&
+          typeof fixed.design.backgroundImage === 'string' &&
+          fixed.design.backgroundImage.startsWith('data:')) {
+        if (menuId) {
+          fixed.design.backgroundImage = `/api/menus/${menuId}/images/bg`;
+        }
       }
-      
+
       return fixed;
     }
-    
-    return data;
+
+    return doc;
   } catch (error) {
     console.error('Error in fixImageUrls:', error);
-    return data; // Return original data if there's an error
+    return data;
   }
 };
 
@@ -515,13 +510,23 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 
 // Get all displays
+// Get all displays (uses .lean() and fixImageUrls to prevent loading heavy Base64 images into memory)
 app.get('/api/displays', async (req, res) => {
   try {
     const displays = await Display.find().populate({
       path: 'currentMenus.menu',
       model: 'Menu'
-    });
-    res.json(displays);
+    }).lean();
+
+    const fixedDisplays = displays.map(d => ({
+      ...d,
+      currentMenus: d.currentMenus?.map(cm => ({
+        ...cm,
+        menu: cm.menu ? fixImageUrls(cm.menu) : cm.menu
+      }))
+    }));
+
+    res.json(fixedDisplays);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -555,13 +560,15 @@ app.delete('/api/displays/:displayId', authenticateToken, requireAdmin, async (r
   }
 });
 
-// Get all menus (sorted newest first, excludes heavy Base64 image data to keep RAM footprint minimal)
+// Get all menus (sorted newest first, converts heavy Base64 image data to light endpoint URLs to keep RAM footprint minimal)
 app.get('/api/menus', async (req, res) => {
   try {
     const menus = await Menu.find({ isActive: true })
-      .select('-images.imageUrl')
-      .sort({ createdAt: -1 });
-    res.json(menus);
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const fixedMenus = fixImageUrls(menus);
+    res.json(fixedMenus);
   } catch (error) {
     console.error('Error in /api/menus:', error);
     res.status(500).json({ error: error.message });
@@ -571,21 +578,29 @@ app.get('/api/menus', async (req, res) => {
 // Serve menu image by index directly as an HTTP image response
 app.get('/api/menus/:id/images/:index', async (req, res) => {
   try {
-    const index = parseInt(req.params.index) || 0;
-    const menu = await Menu.findById(req.params.id).select('images menuItems design');
+    const indexStr = req.params.index;
+    const menu = await Menu.findById(req.params.id).select('images menuItems design').lean();
     if (!menu) {
       return res.status(404).send('Menu not found');
     }
 
     let imageUrl = null;
-    if (menu.images && menu.images[index]?.imageUrl) {
-      imageUrl = menu.images[index].imageUrl;
-    } else if (menu.design?.backgroundImage) {
-      imageUrl = menu.design.backgroundImage;
+    if (indexStr === 'bg' || indexStr === 'background') {
+      imageUrl = menu.design?.backgroundImage;
+    } else if (indexStr.startsWith('item-')) {
+      const itemIdx = parseInt(indexStr.replace('item-', ''), 10) || 0;
+      imageUrl = menu.menuItems?.[itemIdx]?.imageUrl;
     } else {
-      const itemWithImage = menu.menuItems?.find(item => item.imageUrl);
-      if (itemWithImage) {
-        imageUrl = itemWithImage.imageUrl;
+      const idx = parseInt(indexStr, 10) || 0;
+      if (menu.images && menu.images[idx]?.imageUrl) {
+        imageUrl = menu.images[idx].imageUrl;
+      } else if (menu.design?.backgroundImage) {
+        imageUrl = menu.design.backgroundImage;
+      } else {
+        const itemWithImage = menu.menuItems?.find(item => item.imageUrl);
+        if (itemWithImage) {
+          imageUrl = itemWithImage.imageUrl;
+        }
       }
     }
 
@@ -618,11 +633,11 @@ app.get('/api/menus/:id/images/:index', async (req, res) => {
 // Get menu by ID
 app.get('/api/menus/:id', async (req, res) => {
   try {
-    const menu = await Menu.findById(req.params.id);
+    const menu = await Menu.findById(req.params.id).lean();
     if (!menu) {
       return res.status(404).json({ error: 'Menu not found' });
     }
-    res.json(menu);
+    res.json(fixImageUrls(menu));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -829,13 +844,20 @@ app.put('/api/menus/:id', authenticateToken, requireAdmin, (req, res, next) => {
     // Handle image updates - match existing images by URL (preserves user's selection/order)
     let imagesToKeep = [];
     if (imageUrlsToKeep && imageUrlsToKeep.length > 0 && existingMenu.images) {
-      // Match existing images by imageUrl to preserve user's selection
-      // Create a map for efficient lookup
-      const urlMap = new Map(existingMenu.images.map(img => [img.imageUrl, img]));
-      // Preserve the order from the frontend
-      imagesToKeep = imageUrlsToKeep
-        .map(url => urlMap.get(url))
-        .filter(img => img !== undefined); // Remove any URLs that don't match
+      imagesToKeep = imageUrlsToKeep.map(url => {
+        // Match exact URL first
+        let matched = existingMenu.images.find(img => img.imageUrl === url);
+        if (matched) return matched;
+
+        // Match endpoint URL pattern /api/menus/:id/images/:index
+        const match = url.match(/\/api\/menus\/[^\/]+\/images\/(\d+)/);
+        if (match) {
+          const idx = parseInt(match[1], 10);
+          if (existingMenu.images[idx]) return existingMenu.images[idx];
+        }
+
+        return null;
+      }).filter(Boolean);
       console.log(`Keeping ${imagesToKeep.length} existing image(s) out of ${existingMenu.images.length}`);
     }
     
