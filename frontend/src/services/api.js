@@ -1,10 +1,18 @@
 import axios from 'axios'
 
 // Use environment variable for API base URL, fallback to /api for development
-// TODO: Replace 'your-app-name' with your actual Render app name
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL 
-  ? `${import.meta.env.VITE_BACKEND_URL}/api` 
-  : (import.meta.env.DEV ? '/api' : 'https://varda-menu-display-system.onrender.com/api')
+const getBackendUrl = () => {
+  if (import.meta.env.VITE_BACKEND_URL) {
+    return import.meta.env.VITE_BACKEND_URL;
+  }
+  if (import.meta.env.DEV) {
+    return '/api';
+  }
+  return 'https://varda-menu-display-system.onrender.com';
+};
+
+const rawBackendUrl = getBackendUrl();
+const API_BASE_URL = rawBackendUrl === '/api' ? '/api' : `${rawBackendUrl.replace(/\/+$/, '')}/api`;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -36,7 +44,8 @@ api.interceptors.response.use(
       // Clear invalid token and redirect to login
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      const baseUrl = import.meta.env.BASE_URL || '/';
+      window.location.href = `${baseUrl}login`;
     }
     return Promise.reject(error);
   }

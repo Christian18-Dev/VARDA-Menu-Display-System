@@ -29,7 +29,7 @@ export const SocketProvider = ({ children }) => {
       console.log('Attempting to connect to:', backendUrl)
       
       const newSocket = io(backendUrl, {
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'],
         timeout: 30000, // Increased timeout to 30 seconds
         reconnection: false, // We'll handle reconnection manually
         forceNew: true,

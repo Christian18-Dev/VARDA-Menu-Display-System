@@ -20,39 +20,62 @@ const allowedOrigins = [
   "http://localhost:3000", 
   "http://localhost:3001",
   "https://christian18-dev.github.io",
-  "https://varda-menu-display-system.onrender.com", // Your actual Render backend URL
-  "https://christian18-dev.github.io/VARDA-Menu-Display-System" // GitHub Pages URL
+  "https://varda-menu-display-system.onrender.com",
+  "https://christian18-dev.github.io/VARDA-Menu-Display-System"
 ];
+
+// Helper function to validate allowed CORS origins
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // Allow non-browser requests (mobile apps, curl, Postman)
+  
+  let cleanOrigin = origin;
+  try {
+    const url = new URL(origin);
+    cleanOrigin = url.origin;
+  } catch (e) {
+    cleanOrigin = origin.replace(/\/+$/, '');
+  }
+
+  if (allowedOrigins.includes(cleanOrigin) || allowedOrigins.includes(origin)) return true;
+  if (cleanOrigin.endsWith('.github.io')) return true;
+  if (cleanOrigin.endsWith('.onrender.com')) return true;
+
+  return false;
+};
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+      } else {
+        console.log('Socket CORS blocked origin:', origin);
+        callback(null, false);
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
   },
   pingTimeout: 60000, // 60 seconds
   pingInterval: 25000, // 25 seconds
-  transports: ['websocket', 'polling'],
+  transports: ['polling', 'websocket'], // Polling first for initial handshake stability on Render
   allowEIO3: true
 });
 
 // Middleware
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (isOriginAllowed(origin)) {
       callback(null, true);
     } else {
       console.log('CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
+      callback(null, false);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 // Add OPTIONS handling for preflight requests
@@ -466,6 +489,23 @@ io.on('connection', (socket) => {
     connectedClients.delete(socket.id);
     
     logSocketEvent('disconnect', socket.id, `Duration: ${connectionDuration}s${displayInfo} | Remaining clients: ${connectedClients.size}`);
+  });
+});
+
+// Root & Health check routes for Render status monitoring
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'VARDA Menu Display System API',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -885,6 +925,21 @@ app.delete('/api/menus/:id', authenticateToken, requireAdmin, async (req, res) =
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// Global Error Handler Middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled Server Error:', err);
+
+  const origin = req.headers.origin;
+  if (isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error'
+  });
 });
 
 const PORT = process.env.PORT || 5000;

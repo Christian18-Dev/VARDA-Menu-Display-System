@@ -5,8 +5,10 @@ export default defineConfig(({ mode }) => ({
   base: '/VARDA-Menu-Display-System/',
   plugins: [react()],
   define: {
-    // Define environment variables that will be available at build time
-    'import.meta.env.VITE_BACKEND_URL': JSON.stringify(process.env.VITE_BACKEND_URL || ''),
+    // Define environment variables safely without overriding .env when process.env.VITE_BACKEND_URL is missing
+    ...(process.env.VITE_BACKEND_URL ? {
+      'import.meta.env.VITE_BACKEND_URL': JSON.stringify(process.env.VITE_BACKEND_URL)
+    } : {}),
   },
   server: {
     port: 3001,
