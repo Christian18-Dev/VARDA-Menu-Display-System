@@ -2,17 +2,22 @@
 export const fixImageUrl = (imageUrl) => {
   if (!imageUrl) return imageUrl;
   
-  // If it's already a full URL, return as is
-  if (imageUrl.startsWith('http')) {
+  // If it's already a full URL or base64 data URI, return as is
+  if (imageUrl.startsWith('http') || imageUrl.startsWith('data:')) {
     return imageUrl;
   }
   
-  // If it's a relative URL, convert to full backend URL
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 
+    (import.meta.env.DEV ? 'http://localhost:5000' : 'https://varda-menu-display-system.onrender.com');
+
+  // If it's a relative URL starting with /
   if (imageUrl.startsWith('/')) {
-    // Use environment variable if set, otherwise determine based on current environment
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 
-      (import.meta.env.DEV ? 'http://localhost:5000' : 'https://varda-menu-display-system.onrender.com');
     return `${backendUrl}${imageUrl}`;
+  }
+  
+  // If it's a relative URL starting with uploads/ or uploads\
+  if (imageUrl.startsWith('uploads/') || imageUrl.startsWith('uploads\\')) {
+    return `${backendUrl}/${imageUrl.replace(/\\/g, '/')}`;
   }
   
   return imageUrl;

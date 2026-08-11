@@ -12,7 +12,7 @@ import {
   createDisplay,
   deleteDisplay
 } from '../services/api'
-import { fixMenuImageUrls } from '../utils/imageUtils'
+import { fixMenuImageUrls, fixImageUrl } from '../utils/imageUtils'
 import {
   Upload,
   Monitor,
@@ -37,9 +37,135 @@ import {
   User,
   Save,
   X,
-  FileText
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react'
 import TextMenuCreator from './TextMenuCreator'
+
+// Reusable Pagination Controls Component
+const PaginationControls = ({
+  currentPage,
+  totalPages,
+  totalItems,
+  indexOfFirstItem,
+  indexOfLastItem,
+  itemsPerPage,
+  onPageChange,
+  onItemsPerPageChange,
+  itemLabel = "items"
+}) => {
+  if (totalItems === 0) return null;
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push('...');
+      
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      
+      for (let i = start; i <= end; i++) {
+        if (!pages.includes(i)) pages.push(i);
+      }
+      
+      if (currentPage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  return (
+    <div className="mt-6 flex flex-col md:flex-row items-center justify-between border-t border-gray-200 pt-4 gap-4">
+      <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+        <span>
+          Showing <span className="font-semibold text-gray-900">{indexOfFirstItem + 1}</span> to{' '}
+          <span className="font-semibold text-gray-900">{Math.min(indexOfLastItem, totalItems)}</span> of{' '}
+          <span className="font-semibold text-gray-900">{totalItems}</span> {itemLabel}
+        </span>
+
+        {onItemsPerPageChange && (
+          <div className="flex items-center space-x-2">
+            <span className="text-xs text-gray-500">Per page:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
+              className="px-2 py-1 border border-gray-300 rounded-md text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value={6}>6</option>
+              <option value={12}>12</option>
+              <option value={24}>24</option>
+              <option value={48}>48</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center space-x-1">
+        <button
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="p-2 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="First Page"
+        >
+          <ChevronsLeft className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="p-2 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="Previous Page"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+
+        {getPageNumbers().map((page, idx) =>
+          page === '...' ? (
+            <span key={`ellipsis-${idx}`} className="px-2 py-1 text-gray-400 text-sm">
+              ...
+            </span>
+          ) : (
+            <button
+              key={page}
+              onClick={() => onPageChange(page)}
+              className={`px-3 py-1.5 border rounded-md text-sm font-medium transition-all ${
+                currentPage === page
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm font-semibold'
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {page}
+            </button>
+          )
+        )}
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="p-2 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="Next Page"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className="p-2 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="Last Page"
+        >
+          <ChevronsRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // Glassmorphic confirmation modal
 const ConfirmModal = ({ open, title, message, onCancel, onConfirm, confirmText = 'Delete', loading = false }) => {
@@ -112,6 +238,23 @@ const AdminDashboard = () => {
   // Custom menu states
   const [showTextMenuCreator, setShowTextMenuCreator] = useState(false)
   const [editingMenu, setEditingMenu] = useState(null)
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [customMenusCurrentPage, setCustomMenusCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(6)
+
+  const handleItemsPerPageChange = (newSize) => {
+    setItemsPerPage(newSize)
+    setCurrentPage(1)
+    setCustomMenusCurrentPage(1)
+  }
+
+  // Reset pagination when filter/search changes
+  useEffect(() => {
+    setCurrentPage(1)
+    setCustomMenusCurrentPage(1)
+  }, [searchTerm, selectedCategory, selectedBranch, activeTab])
 
   // Form states
   const [menuForm, setMenuForm] = useState({
@@ -186,8 +329,10 @@ const AdminDashboard = () => {
         getMenus()
       ])
 
-      // Fix image URLs for menus
-      const fixedMenus = menusRes.data.map(menu => fixMenuImageUrls(menu))
+      // Fix image URLs for menus and sort newest first (createdAt descending)
+      const fixedMenus = menusRes.data
+        .map(menu => fixMenuImageUrls(menu))
+        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
       const fixedDisplays = displaysRes.data.map(display => ({
         ...display,
         currentMenus: display.currentMenus?.map(cm => ({
@@ -573,6 +718,25 @@ const AdminDashboard = () => {
 
 
 
+  // Helper to get preview image for a menu card (image menu or custom menu)
+  const getMenuPreviewImage = (menu) => {
+    if (!menu) return null
+    if (menu.images && menu.images.length > 0) {
+      if (menu.images[0]?.imageUrl) {
+        return fixImageUrl(menu.images[0].imageUrl)
+      }
+      return fixImageUrl(`/api/menus/${menu._id}/images/0`)
+    }
+    if (menu.design?.backgroundImage) {
+      return fixImageUrl(menu.design.backgroundImage)
+    }
+    const itemWithImage = menu.menuItems?.find(i => i.imageUrl)
+    if (itemWithImage?.imageUrl) {
+      return fixImageUrl(itemWithImage.imageUrl)
+    }
+    return null
+  }
+
   // Filter menus based on search and category
   const filteredMenus = menus.filter(menu => {
     const matchesSearch = menu.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -604,6 +768,18 @@ const AdminDashboard = () => {
   // Separate custom menus and image menus
   const customMenus = menus.filter(menu => menu.menuType === 'custom')
   const imageMenus = menus.filter(menu => menu.menuType === 'image' || !menu.menuType)
+
+  // Pagination for uploaded menus tab
+  const totalPages = Math.ceil(filteredMenus.length / itemsPerPage) || 1
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+  const paginatedMenus = filteredMenus.slice(indexOfFirstItem, indexOfLastItem)
+
+  // Pagination for custom menus tab
+  const customTotalPages = Math.ceil(customMenus.length / itemsPerPage) || 1
+  const customIndexOfLastItem = customMenusCurrentPage * itemsPerPage
+  const customIndexOfFirstItem = customIndexOfLastItem - itemsPerPage
+  const paginatedCustomMenus = customMenus.slice(customIndexOfFirstItem, customIndexOfLastItem)
 
   const categories = ['all', 'general', 'breakfast', 'lunch', 'dinner', 'drinks']
 
@@ -1138,7 +1314,7 @@ const AdminDashboard = () => {
                       {menuForm.existingImages.map((img, idx) => (
                         <div key={idx} className="relative group">
                           <img
-                            src={img.imageUrl}
+                            src={fixImageUrl(img.imageUrl)}
                             alt={`Menu ${idx + 1}`}
                             className="h-24 w-full object-cover rounded-md"
                           />
@@ -1295,17 +1471,17 @@ const AdminDashboard = () => {
                     ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
                     : "space-y-4"
                   }>
-                    {filteredMenus.map((menu) => (
+                    {paginatedMenus.map((menu) => (
                       <div key={menu._id} className={`border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow ${viewMode === 'list' ? 'flex' : ''
                         }`}>
-                        {menu.images && menu.images.length > 0 && (
+                        {getMenuPreviewImage(menu) && (
                           <div className={`relative ${viewMode === 'list' ? 'w-48 flex-shrink-0' : ''}`}>
                             <img
-                              src={menu.images[0].imageUrl}
+                              src={getMenuPreviewImage(menu)}
                               alt={menu.name}
                               className={`${viewMode === 'list' ? 'h-32 w-full' : 'h-48 w-full'} object-cover`}
                             />
-                            {menu.images.length > 1 && (
+                            {menu.images?.length > 1 && (
                               <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
                                 +{menu.images.length - 1} more
                               </div>
@@ -1374,6 +1550,19 @@ const AdminDashboard = () => {
                     ))}
                   </div>
                 )}
+
+                {/* Pagination Controls for Uploaded Menus */}
+                <PaginationControls
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filteredMenus.length}
+                  indexOfFirstItem={indexOfFirstItem}
+                  indexOfLastItem={indexOfLastItem}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                  onItemsPerPageChange={handleItemsPerPageChange}
+                  itemLabel="menus"
+                />
               </div>
             </div>
           </div>
@@ -1411,70 +1600,94 @@ const AdminDashboard = () => {
                       <p className="text-sm">Create your first custom menu to get started.</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {customMenus.map((menu) => (
-                        <div key={menu._id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                          <div className="p-4">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex items-center space-x-2">
-                                <h4 className="text-lg font-medium text-gray-900">{menu.name}</h4>
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                  Custom
-                                </span>
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {paginatedCustomMenus.map((menu) => (
+                          <div key={menu._id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+                            {getMenuPreviewImage(menu) && (
+                              <div className="relative h-40 w-full overflow-hidden bg-gray-100 border-b border-gray-100">
+                                <img
+                                  src={getMenuPreviewImage(menu)}
+                                  alt={menu.name}
+                                  className="h-full w-full object-cover"
+                                />
                               </div>
-                              <div className="flex space-x-2">
-                                <button
-                                  onClick={() => handleEditTextMenu(menu)}
-                                  className="text-blue-600 hover:text-blue-700 transition-colors"
-                                  title="Edit menu"
-                                >
-                                  <Edit3 className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteMenu(menu._id, menu.name)}
-                                  className="text-red-600 hover:text-red-700 transition-colors"
-                                  title="Delete menu"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </div>
-                            {menu.description && (
-                              <p className="text-sm text-gray-600 mb-2">{menu.description}</p>
                             )}
-                            <div className="flex items-center justify-between text-sm text-gray-500">
-                              <div className="flex items-center space-x-2">
-                                <span className="capitalize">{menu.category}</span>
-                                <span className="text-gray-300">•</span>
-                                <span className="capitalize">{menu.branch || 'main'}</span>
-                              </div>
-                              <span>{menu.menuItems?.length || 0} items</span>
-                            </div>
-                            <div className="mt-2 text-xs text-gray-400">
-                              {new Date(menu.createdAt).toLocaleDateString()}
-                            </div>
-
-                            {/* Preview of menu items */}
-                            {menu.menuItems && menu.menuItems.length > 0 && (
-                              <div className="mt-3 pt-3 border-t border-gray-100">
-                                <p className="text-xs text-gray-500 mb-2">Preview:</p>
-                                <div className="space-y-1">
-                                  {menu.menuItems.slice(0, 3).map((item, index) => (
-                                    <div key={index} className="flex items-center justify-between text-xs">
-                                      <span className="truncate">{item.name}</span>
-                                      {item.price && <span className="text-gray-500">{item.price}</span>}
-                                    </div>
-                                  ))}
-                                  {menu.menuItems.length > 3 && (
-                                    <p className="text-xs text-gray-400">+{menu.menuItems.length - 3} more items</p>
-                                  )}
+                            <div className="p-4">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex items-center space-x-2">
+                                  <h4 className="text-lg font-medium text-gray-900">{menu.name}</h4>
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    Custom
+                                  </span>
+                                </div>
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => handleEditTextMenu(menu)}
+                                    className="text-blue-600 hover:text-blue-700 transition-colors"
+                                    title="Edit menu"
+                                  >
+                                    <Edit3 className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteMenu(menu._id, menu.name)}
+                                    className="text-red-600 hover:text-red-700 transition-colors"
+                                    title="Delete menu"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
                                 </div>
                               </div>
-                            )}
+                              {menu.description && (
+                                <p className="text-sm text-gray-600 mb-2">{menu.description}</p>
+                              )}
+                              <div className="flex items-center justify-between text-sm text-gray-500">
+                                <div className="flex items-center space-x-2">
+                                  <span className="capitalize">{menu.category}</span>
+                                  <span className="text-gray-300">•</span>
+                                  <span className="capitalize">{menu.branch || 'main'}</span>
+                                </div>
+                                <span>{menu.menuItems?.length || 0} items</span>
+                              </div>
+                              <div className="mt-2 text-xs text-gray-400">
+                                {new Date(menu.createdAt).toLocaleDateString()}
+                              </div>
+
+                              {/* Preview of menu items */}
+                              {menu.menuItems && menu.menuItems.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-gray-100">
+                                  <p className="text-xs text-gray-500 mb-2">Preview:</p>
+                                  <div className="space-y-1">
+                                    {menu.menuItems.slice(0, 3).map((item, index) => (
+                                      <div key={index} className="flex items-center justify-between text-xs">
+                                        <span className="truncate">{item.name}</span>
+                                        {item.price && <span className="text-gray-500">{item.price}</span>}
+                                      </div>
+                                    ))}
+                                    {menu.menuItems.length > 3 && (
+                                      <p className="text-xs text-gray-400">+{menu.menuItems.length - 3} more items</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+
+                      {/* Pagination Controls for Custom Menus */}
+                      <PaginationControls
+                        currentPage={customMenusCurrentPage}
+                        totalPages={customTotalPages}
+                        totalItems={customMenus.length}
+                        indexOfFirstItem={customIndexOfFirstItem}
+                        indexOfLastItem={customIndexOfLastItem}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setCustomMenusCurrentPage}
+                        onItemsPerPageChange={handleItemsPerPageChange}
+                        itemLabel="custom menus"
+                      />
+                    </>
                   )}
                 </div>
               </div>

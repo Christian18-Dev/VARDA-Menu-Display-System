@@ -154,4 +154,6 @@ const menuSchema = new mongoose.Schema({
   timestamps: true
 });
 
+menuSchema.index({ isActive: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Menu', menuSchema); 

@@ -515,16 +515,63 @@ app.delete('/api/displays/:displayId', authenticateToken, requireAdmin, async (r
   }
 });
 
-// Get all menus (excludes heavy Base64 image data to reduce memory usage)
+// Get all menus (sorted newest first, excludes heavy Base64 image data to keep RAM footprint minimal)
 app.get('/api/menus', async (req, res) => {
   try {
-    // Exclude 'images.imageUrl' (Base64 blobs) from list responses.
-    // The full image data is fetched only when needed via GET /api/menus/:id
-    const menus = await Menu.find({ isActive: true }).select('-images.imageUrl');
+    const menus = await Menu.find({ isActive: true })
+      .select('-images.imageUrl')
+      .sort({ createdAt: -1 });
     res.json(menus);
   } catch (error) {
     console.error('Error in /api/menus:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Serve menu image by index directly as an HTTP image response
+app.get('/api/menus/:id/images/:index', async (req, res) => {
+  try {
+    const index = parseInt(req.params.index) || 0;
+    const menu = await Menu.findById(req.params.id).select('images menuItems design');
+    if (!menu) {
+      return res.status(404).send('Menu not found');
+    }
+
+    let imageUrl = null;
+    if (menu.images && menu.images[index]?.imageUrl) {
+      imageUrl = menu.images[index].imageUrl;
+    } else if (menu.design?.backgroundImage) {
+      imageUrl = menu.design.backgroundImage;
+    } else {
+      const itemWithImage = menu.menuItems?.find(item => item.imageUrl);
+      if (itemWithImage) {
+        imageUrl = itemWithImage.imageUrl;
+      }
+    }
+
+    if (!imageUrl) {
+      return res.status(404).send('Image not found');
+    }
+
+    if (imageUrl.startsWith('data:')) {
+      const matches = imageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches) {
+        const mimeType = matches[1];
+        const imageBuffer = Buffer.from(matches[2], 'base64');
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.send(imageBuffer);
+      }
+    }
+
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return res.redirect(imageUrl);
+    }
+
+    res.redirect(imageUrl);
+  } catch (error) {
+    console.error('Error serving menu image:', error);
+    res.status(500).send('Error serving image');
   }
 });
 

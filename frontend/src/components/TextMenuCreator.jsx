@@ -13,6 +13,7 @@ import {
   Eye
 } from 'lucide-react'
 import { createCustomMenu, updateMenu, uploadItemImage } from '../services/api'
+import { fixImageUrl } from '../utils/imageUtils'
 
 const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -562,7 +563,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                         {item.imageUrl && (
                           <div className="mt-2">
                             <img
-                              src={item.imageUrl}
+                              src={fixImageUrl(item.imageUrl)}
                               alt={item.name}
                               className="h-20 w-20 object-cover rounded-md border border-gray-200"
                             />
@@ -715,7 +716,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                         {formData.design.backgroundImage && (
                           <div className="relative">
                             <img
-                              src={formData.design.backgroundImage}
+                              src={fixImageUrl(formData.design.backgroundImage)}
                               alt="Background"
                               className="w-full h-24 object-cover rounded-lg border border-gray-200"
                             />
@@ -881,7 +882,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                   backgroundColor: formData.design.backgroundColor,
                   color: formData.design.textColor,
                   fontFamily: formData.design.fontFamily,
-                  backgroundImage: formData.design.backgroundImage ? `url(${formData.design.backgroundImage})` : 'none',
+                  backgroundImage: formData.design.backgroundImage ? `url(${fixImageUrl(formData.design.backgroundImage)})` : 'none',
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
                   backgroundRepeat: 'no-repeat',
@@ -981,7 +982,7 @@ const TextMenuCreator = ({ menu = null, onSave, onCancel }) => {
                                 return (
                                   <div style={{ position: 'relative', display: 'inline-block' }}>
                                     <img
-                                      src={item.imageUrl}
+                                      src={fixImageUrl(item.imageUrl)}
                                       alt={item.name}
                                       style={{ width: `${size.width}px`, height: `${size.height}px` }}
                                       className="object-cover rounded-lg shadow-md select-none"
