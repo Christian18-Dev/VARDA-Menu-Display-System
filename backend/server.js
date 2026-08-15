@@ -159,6 +159,39 @@ const fixImageUrls = (data) => {
   }
 };
 
+// Fast lightweight remapper: generates image endpoint URLs from _id + array index,
+// WITHOUT loading any Base64 data from MongoDB (data was excluded via .select())
+const remapImageUrlsFromIndex = (doc) => {
+  if (!doc || typeof doc !== 'object') return doc;
+  const fixed = { ...doc };
+  const menuId = fixed._id ? fixed._id.toString() : null;
+  if (!menuId) return fixed;
+
+  // Remap image-menu images
+  if (fixed.images && Array.isArray(fixed.images)) {
+    fixed.images = fixed.images.map((image, idx) => ({
+      ...image,
+      imageUrl: `/api/menus/${menuId}/images/${idx}`
+    }));
+  }
+
+  // Remap custom menu item images (only if item originally had an imageUrl)
+  if (fixed.menuItems && Array.isArray(fixed.menuItems)) {
+    fixed.menuItems = fixed.menuItems.map((item, idx) => ({
+      ...item,
+      imageUrl: item._hasImage ? `/api/menus/${menuId}/images/item-${idx}` : item.imageUrl
+    }));
+  }
+
+  // Remap background image
+  if (fixed._hasBackgroundImage) {
+    if (fixed.design) fixed.design = { ...fixed.design, backgroundImage: `/api/menus/${menuId}/images/bg` };
+    delete fixed._hasBackgroundImage;
+  }
+
+  return fixed;
+};
+
 // Socket connection tracking
 const connectedClients = new Map();
 
@@ -513,16 +546,18 @@ app.use('/api/auth', authRoutes);
 // Get all displays (uses .lean() and fixImageUrls to prevent loading heavy Base64 images into memory)
 app.get('/api/displays', async (req, res) => {
   try {
+    // Populate menus but exclude Base64 image data - use dedicated image endpoints instead
     const displays = await Display.find().populate({
       path: 'currentMenus.menu',
-      model: 'Menu'
+      model: 'Menu',
+      select: '-images.imageUrl -menuItems.imageUrl -design.backgroundImage'
     }).lean();
 
     const fixedDisplays = displays.map(d => ({
       ...d,
       currentMenus: d.currentMenus?.map(cm => ({
         ...cm,
-        menu: cm.menu ? fixImageUrls(cm.menu) : cm.menu
+        menu: cm.menu ? remapImageUrlsFromIndex(cm.menu) : cm.menu
       }))
     }));
 
@@ -560,14 +595,81 @@ app.delete('/api/displays/:displayId', authenticateToken, requireAdmin, async (r
   }
 });
 
-// Get all menus (sorted newest first, converts heavy Base64 image data to light endpoint URLs to keep RAM footprint minimal)
+// Get all menus (sorted newest first)
+// PERFORMANCE: excludes heavy Base64 image data from the DB query entirely.
+// We only fetch metadata + array lengths, then remap image URLs from _id + index.
 app.get('/api/menus', async (req, res) => {
   try {
-    const menus = await Menu.find({ isActive: true })
-      .sort({ createdAt: -1 })
-      .lean();
+    // Exclude the raw Base64 imageUrl fields - they are served via dedicated image endpoints.
+    // We use virtual flags (_hasImage, _hasBackgroundImage) set via an aggregation
+    // to know which items originally had images, without loading the image data.
+    const menus = await Menu.aggregate([
+      { $match: { isActive: true } },
+      { $sort: { createdAt: -1 } },
+      {
+        $addFields: {
+          _hasBackgroundImage: {
+            $cond: [
+              { $and: [
+                { $ifNull: ['$design.backgroundImage', false] },
+                { $gt: [{ $strLenBytes: { $ifNull: ['$design.backgroundImage', ''] } }, 100] }
+              ]},
+              true,
+              false
+            ]
+          },
+          images: {
+            $map: {
+              input: { $ifNull: ['$images', []] },
+              as: 'img',
+              in: {
+                _id: '$$img._id',
+                fileName: '$$img.fileName',
+                fileSize: '$$img.fileSize',
+                mimeType: '$$img.mimeType',
+                order: '$$img.order',
+                imageUrl: ''
+              }
+            }
+          },
+          menuItems: {
+            $map: {
+              input: { $ifNull: ['$menuItems', []] },
+              as: 'item',
+              in: {
+                _id: '$$item._id',
+                name: '$$item.name',
+                description: '$$item.description',
+                price: '$$item.price',
+                fileName: '$$item.fileName',
+                fileSize: '$$item.fileSize',
+                mimeType: '$$item.mimeType',
+                order: '$$item.order',
+                layout: '$$item.layout',
+                _hasImage: {
+                  $cond: [
+                    { $and: [
+                      { $ifNull: ['$$item.imageUrl', false] },
+                      { $gt: [{ $strLenBytes: { $ifNull: ['$$item.imageUrl', ''] } }, 10] }
+                    ]},
+                    true,
+                    false
+                  ]
+                },
+                imageUrl: ''
+              }
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          'design.backgroundImage': 0
+        }
+      }
+    ]);
 
-    const fixedMenus = fixImageUrls(menus);
+    const fixedMenus = menus.map(remapImageUrlsFromIndex);
     res.json(fixedMenus);
   } catch (error) {
     console.error('Error in /api/menus:', error);

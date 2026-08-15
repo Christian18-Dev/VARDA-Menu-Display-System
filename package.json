@@ -1,0 +1,10 @@
+{
+  "name": "varda-menu-display-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VARDA Menu Display System",
+  "scripts": {
+    "dev:backend": "npm start --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend"
+  }
+}
