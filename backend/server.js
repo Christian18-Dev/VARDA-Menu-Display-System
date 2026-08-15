@@ -1037,16 +1037,16 @@ app.post('/api/upload-item-image', authenticateToken, requireAdmin, (req, res) =
 // Delete menu
 app.delete('/api/menus/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const menu = await Menu.findById(req.params.id);
-    if (!menu) {
+    // Use findByIdAndDelete directly - avoids loading the full document (with heavy
+    // Base64 image data) into memory first, which could stall the 400MB-capped heap.
+    const deleted = await Menu.findByIdAndDelete(req.params.id).select('_id').lean();
+    if (!deleted) {
       return res.status(404).json({ error: 'Menu not found' });
     }
 
-    // Delete from database (images are stored as Base64, no file cleanup needed)
-    await Menu.findByIdAndDelete(req.params.id);
-    
     res.json({ message: 'Menu deleted successfully' });
   } catch (error) {
+    console.error('Delete menu error:', error);
     res.status(500).json({ error: error.message });
   }
 });
